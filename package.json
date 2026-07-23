@@ -12,10 +12,12 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:types": "npx supabase@2.109.1 gen types typescript --linked > src/lib/supabase/database.types.ts",
+    "test:integration": "vitest run --config vitest.config.integration.ts",
+    "db:types": "npx supabase@2.109.1 gen types typescript --local > src/lib/supabase/database.types.ts",
+    "db:lint": "npx supabase@2.109.1 db lint --local --level warning",
+    "db:reset": "npx supabase@2.109.1 db reset --local",
     "db:push:dry": "npx supabase@2.109.1 db push --linked --dry-run",
-    "db:push": "npx supabase@2.109.1 db push --linked",
-    "db:lint": "npx supabase@2.109.1 db lint --linked --level warning"
+    "db:push": "npx supabase@2.109.1 db push --linked"
   },
   "dependencies": {
     "@base-ui/react": "1.3.0",
@@ -42,6 +44,7 @@
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.2",
     "eslint-config-next": "16.2.9",
+    "supabase": "2.109.1",
     "tailwindcss": "4.1.18",
     "typescript": "5.9.3",
     "vitest": "3.2.7"

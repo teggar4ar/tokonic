@@ -18,13 +18,13 @@ Established conventions:
 - Prefer explicit assertions such as `toBe`, `toContain`, and `toMatch` over broad snapshots.
 - Pure unit tests have no setup/teardown when no shared state exists.
 - No Supabase client is mocked in the current baseline.
-- No test currently starts Docker or connects to local/remote Supabase.
+- No test currently starts a CI-hosted disposable Supabase stack or connects to Supabase at runtime; the operator's machine is not expected to run Docker.
 - `seller-migration.test.ts` is a static SQL contract test, **not** proof that migrations execute or RLS works at runtime.
 - There is no project `vitest.config.*` yet; `npm test` runs Vitest defaults.
 
 Current gaps relative to the TDD:
 
-- [ ] No PostgreSQL/Supabase integration test setup exists.
+- [ ] No GitHub Actions PostgreSQL/Supabase integration workflow exists yet.
 - [ ] No runtime RLS matrix test exists for anon/admin/unrelated authenticated user.
 - [ ] No route/service integration tests exist.
 - [ ] No automated auth session/cookie test exists; login/logout remains manual E2E.
@@ -70,7 +70,7 @@ Prefer real inputs and outputs. Do not mock a pure function's internals.
 
 ### Database Integration — `tests/integration/database/`
 
-Use a disposable local/test Supabase PostgreSQL database for:
+Use a CI-hosted disposable Supabase PostgreSQL database in GitHub Actions for:
 
 - Constraints, triggers, grants, and RLS behavior.
 - Transactional PostgreSQL functions.
@@ -79,12 +79,27 @@ Use a disposable local/test Supabase PostgreSQL database for:
 
 Rules:
 
-- Never run destructive integration tests against the shared remote development project.
+- Database integration suites run only in the GitHub Actions hosted runner; they are not expected to run on the operator's machine.
+- Never install or require local Docker for these suites, and never run destructive integration tests against the shared remote development project.
+- The future workflow must trigger on every push to every branch, start the Supabase CLI stack in the runner, replay migrations from empty, seed deterministic synthetic fixtures and Auth identities, run the suites, and tear down even on failure.
 - Start from reviewed migrations and deterministic synthetic fixtures.
 - Use distinct synthetic identities for owner and unrelated authenticated user.
 - Reset/clean state between tests or suites; do not depend on execution order.
 - Assert database state after the operation, not only returned status.
 - Static SQL text assertions may supplement but never replace runtime database tests.
+- A database gate is complete only when the pushed commit has a green workflow run and its URL is recorded as evidence.
+
+### CI-Only Setup and Feedback Loop
+
+To write a database test for CI:
+
+1. Add the behavior-focused test under `tests/integration/database/` and deterministic reusable builders under `tests/fixtures/`.
+2. Read connection details only from the CI test environment supplied by the disposable runner stack; never add shared-remote credentials or hardcoded endpoints.
+3. Make setup idempotent, isolate records with synthetic identities/UUIDs, and clean or reset state without depending on test order.
+4. Push the smallest useful change to any branch; database integration tests are not expected to run locally.
+5. Open the GitHub Actions run for that pushed commit, inspect the migration, seed, and integration-test steps, and record the green run URL in the task/release evidence.
+
+This strategy has a delayed feedback loop: results arrive only after pushing and waiting for GitHub Actions. Keep database changes small and push more frequently so migration, RLS, Storage, and concurrency failures are discovered early.
 
 ### Route/Service Integration — `tests/integration/services/`
 
@@ -117,7 +132,7 @@ Do not mark the relevant phase done until its required items are automated.
 
 - [x] Login Zod validation basics — unit contract exists.
 - [x] Seller migration contains expected RLS ownership predicates — static SQL contract only.
-- [ ] **Not yet implemented:** migrations execute cleanly from an empty database.
+- [ ] **Not yet implemented:** the GitHub Actions disposable stack executes migrations cleanly from an empty database on every branch push.
 - [ ] **Not yet implemented:** RLS matrix proves anon cannot read, owner can access, and a second unrelated authenticated user reads/mutates zero rows.
 - [ ] **Not yet implemented:** admin service rejects no-session and unrelated users.
 
@@ -184,7 +199,8 @@ describe("normalizePhone", () => {
 For integration suites:
 
 - Put shared synthetic records/builders under `tests/fixtures/`.
-- Use `beforeAll` only for expensive suite infrastructure, `beforeEach` for isolation, and `afterAll` for cleanup.
+- Let the GitHub Actions workflow own Supabase stack startup, empty migration replay, synthetic seed setup, and unconditional teardown; tests own only suite/record isolation.
+- Use `beforeAll` only for expensive suite fixtures, `beforeEach` for isolation, and `afterAll` for cleanup.
 - Keep each test readable as arrange → act → assert; separate phases with whitespace rather than comments.
 - Name tests by observable behavior: `it("does not decrement stock when the callback is replayed")`.
 - Test the public/service/database boundary, not private helper call order.
@@ -194,7 +210,7 @@ For integration suites:
 
 - Do not mock the function under test or Supabase query chains merely to assert calls.
 - Pure domain tests use no Supabase mock.
-- Database behavior uses real disposable PostgreSQL/Supabase; do not claim RLS coverage from mocked clients.
+- Database behavior uses the real CI-hosted disposable PostgreSQL/Supabase stack; do not claim RLS coverage from mocked clients, local Docker, or the shared remote project.
 - Provider adapters use official or sanitized recorded fixtures. Remove secrets, authorization headers, and PII.
 - Fix time, UUIDs, and provider responses when determinism matters.
 - Concurrency tests issue genuinely overlapping database operations and assert final persisted state.
@@ -220,6 +236,7 @@ For integration suites:
 - [ ] Add abuse/replay/concurrency cases where applicable.
 - [ ] Use only synthetic, sanitized, deterministic fixtures.
 - [ ] Update the critical-path checklist in this document from “not yet implemented” only when the named automated test exists and passes.
-- [ ] Run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
-- [ ] For database changes, also run migration replay/dry-run, `npm run db:lint`, generated-type checks, and Supabase advisors.
+- [ ] Run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build` locally where applicable.
+- [ ] For database changes, push the commit and confirm the GitHub Actions workflow performs empty migration replay and integration tests in its disposable Supabase stack; also complete `npm run db:lint`, generated-type checks, and Supabase advisors.
+- [ ] Record the green database workflow run URL as task/phase evidence; do not substitute a shared-remote or operator-local Docker run.
 - [ ] Complete the relevant manual E2E scenarios before phase acceptance.

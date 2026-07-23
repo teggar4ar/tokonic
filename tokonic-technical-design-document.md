@@ -26,7 +26,7 @@ Product goals, user requirements, and exclusions are defined in `tokonic-prd.md`
 - Isolate provider-specific behavior behind validated adapters.
 - Enforce payment idempotency and inventory consistency transactionally.
 - Apply authorization at application and data-access boundaries.
-- Keep local setup, migrations, tests, and recovery procedures reproducible by one developer.
+- Keep application setup and recovery reproducible by one developer while database integration tests run reproducibly in a CI-hosted disposable Supabase stack without local Docker.
 
 ### 1.2 Product Scope Reference
 
@@ -125,7 +125,7 @@ Supabase      RajaOngkir    Duitku POP
 | Shipping | RajaOngkir API V2 Shipping Cost |
 | Unit/integration tests | Vitest |
 | Hosting | Vercel |
-| Local backend | Supabase CLI/local stack when available |
+| Integration-test backend | Supabase CLI disposable stack inside GitHub Actions; never local Docker or the shared remote project |
 
 ### 3.1 Dependency Policy
 
@@ -387,7 +387,7 @@ Rules:
 
 ### 6.4 Generated Types
 
-Generate and commit TypeScript definitions for the application schema after migrations. Application data modules use `Database` generic typing for Supabase clients. CI or the developer checklist must detect stale generated types after schema changes.
+Generate and commit TypeScript definitions for the application schema after migrations. Application data modules use `Database` generic typing for Supabase clients. CI must detect stale generated types after schema changes, and database-gate evidence must include the green workflow run URL.
 
 ---
 
@@ -1479,19 +1479,21 @@ Rules:
 
 ---
 
-## 24. Database Migrations and Local Development
+## 24. Database Migrations and CI Verification
 
 ### 24.1 Workflow
 
-Use Supabase CLI and migration files as the source of truth.
+Use Supabase CLI and migration files as the source of truth. The operator's machine is not required to install or run Docker.
 
-1. Initialize/link local project.
-2. Develop schema locally when possible.
-3. Create reviewed migration files.
-4. Apply migrations to development/staging before production.
-5. Generate TypeScript database types.
-6. Run Supabase security and performance advisors.
-7. Seed one seller/admin-linked development record and sample catalog safely.
+1. Create reviewed migration files without applying them to the shared remote project for automated testing.
+2. Push a small database change to trigger GitHub Actions on every branch push.
+3. In the hosted runner, start a disposable Supabase CLI stack.
+4. Replay all migrations from an empty database.
+5. Seed deterministic synthetic Auth identities and fixtures required by the integration suites.
+6. Run database, Auth, Storage, RLS, and concurrency integration tests.
+7. Generate/check TypeScript database types and run database lint and applicable advisors.
+8. Tear down the disposable stack even when a step fails.
+9. Record the green workflow run URL as gate evidence before applying reviewed migrations to development/staging and later production.
 
 Do not make untracked production schema edits through the dashboard.
 
@@ -1538,7 +1540,7 @@ Before any commercial production use:
 
 ### 25.2 Database Integration Tests
 
-Run against local/test Supabase PostgreSQL:
+Run only against a CI-hosted disposable Supabase PostgreSQL stack started by the Supabase CLI inside GitHub Actions. These suites are not expected to run on the operator's machine, must never contact the shared remote project, and must be green on the pushed commit with the workflow run URL recorded as evidence:
 
 - Constraints reject negative stock, money, weight, or quantity.
 - RLS policy matrix for anon/admin/unrelated authenticated user.
@@ -1577,7 +1579,7 @@ Run against local/test Supabase PostgreSQL:
 
 - Lint and typecheck pass.
 - Critical Vitest suites pass.
-- Database integration tests pass.
+- The push-triggered GitHub Actions database workflow passes against a CI-hosted disposable Supabase stack, and its run URL is recorded as evidence.
 - Supabase advisors show no unresolved critical security issue.
 - Duitku sandbox flow completes.
 - RajaOngkir live cost API integration handles valid and failure cases.
@@ -1658,7 +1660,8 @@ The Free plan is not the assumed production-commercial plan.
 
 Minimum:
 
-- Local development.
+- Local application development without a required Docker/Supabase stack.
+- GitHub Actions with an ephemeral Supabase CLI stack for database integration tests on every branch push.
 - Vercel preview with Supabase development project.
 - Vercel production/demo with controlled credentials.
 
@@ -1691,7 +1694,7 @@ A separate Supabase staging project is desirable but optional under Free plan ac
 
 - Scaffold Next.js TypeScript application.
 - Configure Tailwind, ReUI/shadcn-compatible setup, and Heroicons.
-- Configure Supabase local/remote clients and generated types.
+- Configure Supabase application clients and generated types; specify CI-hosted disposable integration testing without local Docker.
 - Create initial schema, RLS, seller seed, and Auth integration.
 - Implement admin login and protected layout/service guard.
 
@@ -1759,7 +1762,7 @@ Every item must be documented in code-facing architecture notes or an ADR when r
 Functional completion is defined in PRD Sections 1.5, 11, and 16. Technical evidence is complete when:
 
 - The application can be recreated from repository instructions, migrations, generated types, and documented environment configuration.
-- Lint, typecheck, critical Vitest suites, and PostgreSQL integration tests pass.
+- Lint, typecheck, critical Vitest suites, and CI-hosted PostgreSQL integration tests pass; each database gate records the green GitHub Actions run URL.
 - The RLS matrix blocks anonymous and unrelated authenticated access as designed.
 - Payment idempotency, atomic inventory, insufficient-stock review, expiration reconciliation, and duplicate-submission invariants pass concurrency/integration tests.
 - Storage MIME, size, count, path, ownership, deletion, and orphan-cleanup behavior is verified.

@@ -13,6 +13,12 @@
       "skillPath": "skills/cloudinary-next/SKILL.md",
       "computedHash": "32b7ae1ff20de36a62496bcc4e670724e5e6332b8d1b01a19c3c89bbb3eced77"
     },
+    "github-actions-templates": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/cicd-automation/skills/github-actions-templates/SKILL.md",
+      "computedHash": "d57f2a45525180e30d9130aeab1613930c274917c5002899d8c37185594de411"
+    },
     "nextjs-app-router-patterns": {
       "source": "wshobson/agents",
       "sourceType": "github",
