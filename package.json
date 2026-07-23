@@ -1,0 +1,49 @@
+{
+  "name": "tokonic",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0 <23.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:types": "npx supabase@2.109.1 gen types typescript --linked > src/lib/supabase/database.types.ts",
+    "db:push:dry": "npx supabase@2.109.1 db push --linked --dry-run",
+    "db:push": "npx supabase@2.109.1 db push --linked",
+    "db:lint": "npx supabase@2.109.1 db lint --linked --level warning"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.3.0",
+    "@heroicons/react": "2.2.0",
+    "@hookform/resolvers": "5.4.0",
+    "@supabase/ssr": "0.12.3",
+    "@supabase/supabase-js": "2.110.8",
+    "9router": "^0.5.40",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "next": "16.2.9",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-hook-form": "7.82.0",
+    "server-only": "0.0.1",
+    "tailwind-merge": "3.5.0",
+    "tw-animate-css": "1.4.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.18",
+    "@types/node": "22.19.11",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.2",
+    "eslint-config-next": "16.2.9",
+    "tailwindcss": "4.1.18",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
