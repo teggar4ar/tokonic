@@ -65,3 +65,33 @@ export async function createAuthenticatedAdminClient(): Promise<SupabaseClient<D
   }
   return client;
 }
+
+const UNRELATED_USER_EMAIL = "unrelated-user@example.test";
+const UNRELATED_USER_PASSWORD = "Unrelated-CI-Password-2026!";
+
+export async function createUnrelatedAuthenticatedClient(): Promise<SupabaseClient<Database>> {
+  const env = readDisposableStackEnvironment();
+  const serviceRole = buildClient(env.serviceRoleKey, env.url);
+
+  const { error: createError } = await serviceRole.auth.admin.createUser({
+    email: UNRELATED_USER_EMAIL,
+    password: UNRELATED_USER_PASSWORD,
+    email_confirm: true,
+  });
+  if (
+    createError &&
+    !createError.message.toLowerCase().includes("already been registered")
+  ) {
+    throw new Error(`Failed to create unrelated user: ${createError.message}`);
+  }
+
+  const client = buildClient(env.anonKey, env.url);
+  const { error: signInError } = await client.auth.signInWithPassword({
+    email: UNRELATED_USER_EMAIL,
+    password: UNRELATED_USER_PASSWORD,
+  });
+  if (signInError) {
+    throw new Error(`Failed to sign in as unrelated user: ${signInError.message}`);
+  }
+  return client;
+}
