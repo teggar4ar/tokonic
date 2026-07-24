@@ -91,7 +91,7 @@ jobs:
         run: |
           env_file="$RUNNER_TEMP/supabase.env"
           advisor_sql="$RUNNER_TEMP/splinter.sql"
-          advisor_json="$RUNNER_TEMP/supabase-advisors.json"
+          advisor_csv="$RUNNER_TEMP/supabase-advisors.csv"
           supabase status -o env > "$env_file"
           set -a
           . "$env_file"
@@ -100,9 +100,11 @@ jobs:
           curl --fail --silent --show-error --location \
             "https://raw.githubusercontent.com/supabase/splinter/b69b4b9e0e32bb04b389edbb95b720f4b634e9ae/splinter.sql" \
             --output "$advisor_sql"
-          supabase db query --db-url "$DB_URL" --file "$advisor_sql" --output-format json > "$advisor_json"
-          cat "$advisor_json"
-          jq --exit-status '[.[] | select(.facing == "EXTERNAL" and (.level == "ERROR" or .level == "WARN"))] | length == 0' "$advisor_json"
+          psql "$DB_URL" --csv --file "$advisor_sql" > "$advisor_csv"
+          cat "$advisor_csv"
+          if awk -F, 'NR > 1 && $3 ~ /^(ERROR|WARN)$/ && $4 == "EXTERNAL" { found = 1 } END { exit found ? 0 : 1 }' "$advisor_csv"; then
+            exit 1
+          fi
 
       - name: Generate database types
         run: npm run db:types
