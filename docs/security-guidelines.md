@@ -4,7 +4,7 @@ Use this checklist for every security-relevant code review. `AGENTS.md` and `tok
 
 ## Known Issues Found During Audit
 
-- [ ] **PostgreSQL login rate limiting is selected but not complete.** Implement and deploy the migration/function plus login integration before exposing the admin login publicly; keep validation, throttling, dependency failure, and credential failure generic and indistinguishable.
+- [x] **PostgreSQL login rate limiting is implemented.** TASK-010A/B added the durable limiter migrations, disposable-stack integration tests, and fail-closed login integration; deployment order and generic failure behavior remain mandatory.
 - [ ] **Remote Supabase leaked-password protection is disabled.** Enable it in Supabase Auth settings before production use.
 - [ ] **Runtime RLS matrix tests are incomplete.** Add integration tests for `anon`, the linked admin, and a second unrelated authenticated user. Existing tests inspect the SQL contract but do not execute the full identity matrix.
 

@@ -762,7 +762,7 @@ Product deletion/unpublish must enumerate associated object paths if hard deleti
 
 ### 10.2.1 Login Rate Limiting
 
-Login rate limiting uses a durable Supabase PostgreSQL table and atomic consume function. `LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE` supports exactly two fail-closed identity contracts. `vercel-direct` requires `VERCEL=1` and one canonical client address from `x-forwarded-for`, which Vercel overwrites to prevent spoofing; missing, repeated/list-valued, comma-chained, whitespace-ambiguous, or malformed client identity is rejected without fallback, and valid IPv4 and IPv6 text is canonicalized, including mapping IPv4-mapped IPv6 to IPv4. `localhost-development` is accepted only when `NODE_ENV` is not `production` and `VERCEL` is absent; it does not read or trust any request header and always uses the fixed canonical loopback identity `127.0.0.1`. Production or any Vercel runtime configured with localhost mode fails closed. The login boundary transforms the selected canonical identity and normalized email into separate irreversible keyed digests with a dedicated server-only secret and consumes both buckets before calling Supabase Auth. Each bucket allows five attempts per 15-minute window. The system never stores or logs the submitted password, raw email, raw IP address, Auth token, full forwarding-header chain, digest secret, or complete limiter key.
+Login rate limiting uses a durable Supabase PostgreSQL table and atomic consume function. The current official Vercel source and deployment-topology decision are recorded in `docs/adr/001-vercel-direct-client-ip.md`. `LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE` supports exactly two fail-closed identity contracts. `vercel-direct` requires `VERCEL=1`, a direct Vercel deployment without another trusted proxy, and one canonical client address from `x-forwarded-for`, which Vercel overwrites to prevent spoofing; missing, repeated/list-valued, comma-chained, whitespace-ambiguous, or malformed client identity is rejected without fallback, and valid IPv4 and IPv6 text is canonicalized, including mapping IPv4-mapped IPv6 to IPv4. `localhost-development` is accepted only when `NODE_ENV` is not `production` and `VERCEL` is absent; it does not read or trust any request header and always uses the fixed canonical loopback identity `127.0.0.1`. Production or any Vercel runtime configured with localhost mode fails closed. The login boundary transforms the selected canonical identity and normalized email into separate irreversible keyed digests with a dedicated server-only secret and consumes both buckets before calling Supabase Auth. Each bucket allows five attempts per 15-minute window. The system never stores or logs the submitted password, raw email, raw IP address, Auth token, full forwarding-header chain, digest secret, or complete limiter key.
 
 The consume operation atomically creates or updates one bucket, resets expired windows, increments allowed attempts, and returns only an allow/deny result with bounded reset metadata. Concurrent requests for either digest must not exceed the configured limit. Invalid input, throttling, limiter/configuration failure, missing or untrusted client identity, and Supabase credential rejection all produce the same generic public login failure. After successful authentication, the service deletes only the normalized-email bucket; the client-IP bucket remains until expiry.
 
@@ -1481,9 +1481,9 @@ DUITKU_API_KEY
 DUITKU_CALLBACK_URL
 DUITKU_RETURN_URL
 DUITKU_EXPIRY_PERIOD
-LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+LOGIN_RATE_LIMIT_ATTEMPTS
 LOGIN_RATE_LIMIT_WINDOW_SECONDS
-LOGIN_RATE_LIMIT_KEY_SECRET
+LOGIN_RATE_LIMIT_DIGEST_SECRET
 LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE
 LOGIN_RATE_LIMIT_RETENTION_SECONDS
 ```
