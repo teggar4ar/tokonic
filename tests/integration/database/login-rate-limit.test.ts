@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -30,6 +33,31 @@ type Rpc = <T>(name: string, params: Record<string, string>) => PromiseLike<RpcR
 
 function rpcFor(client: SupabaseClient): Rpc {
   return client.rpc.bind(client) as unknown as Rpc;
+}
+
+function readLimiterColumns(): string[] {
+  readDisposableStackEnvironment();
+  const databaseUrl = process.env.DB_URL;
+  if (!databaseUrl) throw new Error("Missing required Supabase env var \"DB_URL\".");
+  const hostname = new URL(databaseUrl).hostname;
+  if (hostname !== "127.0.0.1" && hostname !== "localhost" && hostname !== "::1") {
+    throw new Error("Integration tests require a loopback PostgreSQL URL.");
+  }
+  const cli = resolve("node_modules", ".bin", process.platform === "win32" ? "supabase.cmd" : "supabase");
+  const output = execFileSync(
+    cli,
+    [
+      "db",
+      "query",
+      "--db-url",
+      databaseUrl,
+      "--output-format",
+      "json",
+      "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'login_rate_limit_buckets' order by column_name",
+    ],
+    { encoding: "utf8", windowsHide: true },
+  );
+  return (JSON.parse(output) as Array<{ column_name: string }>).map(({ column_name }) => column_name);
 }
 
 function limiterRpc(client: ReturnType<typeof createServiceRoleClient>) {
@@ -180,8 +208,12 @@ describe("PostgreSQL login rate limiter", () => {
     await consumeFive(limiter, digests.ipA, digests.emailA);
     await expectAllowed(await limiter.consume(digests.ipB, digests.emailB), true);
 
-    expect(await limiter.deleteEmail(digests.emailA)).toEqual({ data: { deleted_count: 1 }, error: null });
-    expect(await limiter.deleteEmail(digests.emailA)).toEqual({ data: { deleted_count: 0 }, error: null });
+    const firstDeletion = await limiter.deleteEmail(digests.emailA);
+    expect(firstDeletion.error).toBeNull();
+    expect(firstDeletion.data).toEqual({ deleted_count: 1 });
+    const repeatedDeletion = await limiter.deleteEmail(digests.emailA);
+    expect(repeatedDeletion.error).toBeNull();
+    expect(repeatedDeletion.data).toEqual({ deleted_count: 0 });
     await expectAllowed(await limiter.consume(digests.ipA, digests.emailC), false);
     await expectAllowed(await limiter.consume(digests.ipC, digests.emailA), true);
     await expectAllowed(await limiter.consume(digests.ipC, digests.emailB), true);
@@ -198,28 +230,31 @@ describe("PostgreSQL login rate limiter", () => {
       "2026-07-24T23:45:01.000Z",
     );
 
-    expect(exactBoundaryBeforeCleanup).toEqual({
-      data: { allowed: false, reset_at: "2026-07-25T00:00:00+00:00" },
-      error: null,
+    expect(exactBoundaryBeforeCleanup.error).toBeNull();
+    expect(exactBoundaryBeforeCleanup.data).toEqual({
+      allowed: false,
+      reset_at: "2026-07-25T00:00:00+00:00",
     });
-    expect(await limiter.cleanup()).toEqual({ data: { deleted_count: 2 }, error: null });
-    expect(await limiter.cleanup()).toEqual({ data: { deleted_count: 0 }, error: null });
-    expect(
-      await limiter.consume(digests.ipB, digests.emailB, "2026-07-24T23:45:02.000Z"),
-    ).toEqual(exactBoundaryBeforeCleanup);
+    const firstCleanup = await limiter.cleanup();
+    expect(firstCleanup.error).toBeNull();
+    expect(firstCleanup.data).toEqual({ deleted_count: 2 });
+    const repeatedCleanup = await limiter.cleanup();
+    expect(repeatedCleanup.error).toBeNull();
+    expect(repeatedCleanup.data).toEqual({ deleted_count: 0 });
+    const exactBoundaryAfterCleanup = await limiter.consume(
+      digests.ipB,
+      digests.emailB,
+      "2026-07-24T23:45:02.000Z",
+    );
+    expect(exactBoundaryAfterCleanup.error).toBeNull();
+    expect(exactBoundaryAfterCleanup.data).toEqual(exactBoundaryBeforeCleanup.data);
     await expectAllowed(await limiter.consume(digests.ipC, digests.emailC, "2026-07-24T23:45:02.000Z"), true);
   });
 
-  it("exposes exactly the digest-only limiter columns", async () => {
-    const environment = readDisposableStackEnvironment();
-    const response = await fetch(`${environment.url}/rest/v1/`, {
-      headers: { apikey: environment.serviceRoleKey, Authorization: `Bearer ${environment.serviceRoleKey}` },
-    });
-    const schema = (await response.json()) as { definitions?: Record<string, { properties?: Record<string, unknown> }> };
-    const fields = Object.keys(schema.definitions?.login_rate_limit_buckets?.properties ?? {}).sort();
+  it("stores exactly the digest-only limiter columns", () => {
+    const fields = readLimiterColumns();
     const forbidden = ["email", "password", "session", "ip", "client_ip", "forwarded_for", "forwarding_headers", "digest_secret"];
 
-    expect(response.ok).toBe(true);
     expect(fields).toEqual(["attempt_count", "bucket_type", "expires_at", "key_digest", "window_started_at"]);
     for (const field of forbidden) expect(fields).not.toContain(field);
   });
