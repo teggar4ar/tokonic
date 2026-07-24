@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -39,6 +34,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      login_rate_limit_buckets: {
+        Row: {
+          attempt_count: number
+          bucket_type: string
+          expires_at: string
+          key_digest: string
+          window_started_at: string
+        }
+        Insert: {
+          attempt_count: number
+          bucket_type: string
+          expires_at: string
+          key_digest: string
+          window_started_at: string
+        }
+        Update: {
+          attempt_count?: number
+          bucket_type?: string
+          expires_at?: string
+          key_digest?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
       sellers: {
         Row: {
           auth_user_id: string
@@ -95,7 +114,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_login_rate_limit_buckets: {
+        Args: { p_now: string }
+        Returns: Json
+      }
+      consume_login_rate_limit: {
+        Args: { p_email_digest: string; p_ip_digest: string; p_now: string }
+        Returns: Json
+      }
+      delete_login_rate_limit_email_bucket: {
+        Args: { p_email_digest: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
