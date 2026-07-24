@@ -29,13 +29,27 @@ export async function provisionAdmin(env: ProvisionEnv): Promise<ProvisionResult
     createResult.error &&
     createResult.error.message.toLowerCase().includes("already been registered")
   ) {
-    const { data: listData } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
-    const existingUser = listData?.users?.find(
-      (u) => u.email === env.CI_ADMIN_EMAIL,
-    );
+    let existingUser = null;
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore && !existingUser) {
+      const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
+        page,
+        perPage: 1000,
+      });
+
+      if (listError) throw new Error(`Failed to list users: ${listError.message}`);
+
+      existingUser = listData.users.find((u) => u.email === env.CI_ADMIN_EMAIL);
+      
+      if (listData.users.length < 1000) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    }
+
     if (!existingUser) {
       throw new Error(
         "Auth user reportedly exists but could not be found by email.",
