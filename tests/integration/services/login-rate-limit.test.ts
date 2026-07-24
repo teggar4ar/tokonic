@@ -15,12 +15,20 @@ import {
 } from "../../../src/server/services/login-service";
 
 const validConfig = {
+  NODE_ENV: "production",
   VERCEL: "1",
-  LOGIN_TRUSTED_PROXY_MODE: "vercel-direct",
+  LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE: "vercel-direct",
   LOGIN_RATE_LIMIT_ATTEMPTS: "5",
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: "900",
   LOGIN_RATE_LIMIT_DIGEST_SECRET: "a".repeat(64),
   SUPABASE_SECRET_KEY: "sb_secret_synthetic_test_key_1234567890",
+};
+
+const localhostDevelopmentConfig = {
+  ...validConfig,
+  NODE_ENV: "development",
+  VERCEL: undefined,
+  LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE: "localhost-development",
 };
 
 const originalEnvironment = { ...process.env };
@@ -64,13 +72,74 @@ describe("login rate-limit service contract", () => {
 
     for (const env of [
       { ...validConfig, VERCEL: "0" },
-      { ...validConfig, LOGIN_TRUSTED_PROXY_MODE: "VERCEL-DIRECT" },
-      { ...validConfig, LOGIN_TRUSTED_PROXY_MODE: "proxy" },
+      { ...validConfig, LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE: "VERCEL-DIRECT" },
+      { ...validConfig, LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE: "proxy" },
       { ...validConfig, LOGIN_RATE_LIMIT_ATTEMPTS: "6" },
       { ...validConfig, LOGIN_RATE_LIMIT_WINDOW_SECONDS: "899" },
       { ...validConfig, LOGIN_RATE_LIMIT_DIGEST_SECRET: "short" },
     ]) {
       expect(() => parseLoginRateLimitConfig(env)).toThrow();
+    }
+  });
+
+  it("accepts exact localhost development mode only outside production and Vercel", () => {
+    expect(parseLoginRateLimitConfig(localhostDevelopmentConfig)).toEqual({
+      deployment: "localhost-development",
+      proxyMode: "localhost-development",
+      attempts: 5,
+      windowSeconds: 900,
+      digestSecret: validConfig.LOGIN_RATE_LIMIT_DIGEST_SECRET,
+    });
+
+    for (const env of [
+      { ...localhostDevelopmentConfig, LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE: "LOCALHOST-DEVELOPMENT" },
+      { ...localhostDevelopmentConfig, NODE_ENV: "production" },
+      { ...localhostDevelopmentConfig, VERCEL: "1" },
+      { ...localhostDevelopmentConfig, NODE_ENV: "production", VERCEL: "1" },
+    ]) {
+      expect(() => parseLoginRateLimitConfig(env)).toThrow();
+    }
+  });
+
+  it("uses one fixed loopback identity in localhost development mode and never trusts caller headers", async () => {
+    const expected = deriveLoginDigests({
+      email: "admin@example.test",
+      canonicalIp: "127.0.0.1",
+      secret: validConfig.LOGIN_RATE_LIMIT_DIGEST_SECRET,
+    });
+
+    for (const headers of [
+      {},
+      { "x-forwarded-for": "203.0.113.7" },
+      { "x-forwarded-for": "203.0.113.7, 198.51.100.2" },
+      { "x-forwarded-for": ["203.0.113.7", "198.51.100.2"] },
+      { "x-real-ip": "198.51.100.8", forwarded: "for=192.0.2.1" },
+    ]) {
+      const deps = dependencies();
+      await expect(
+        loginWithRateLimit(
+          request({ headers, config: parseLoginRateLimitConfig(localhostDevelopmentConfig) }),
+          deps,
+        ),
+      ).resolves.toEqual(success);
+      expect(deps.consume).toHaveBeenCalledWith({
+        ipDigest: expected.ipDigest,
+        emailDigest: expected.emailDigest,
+      });
+    }
+  });
+
+  it("keeps vercel-direct strict and dependent on VERCEL=1 plus one valid forwarded address", async () => {
+    expect(() => parseLoginRateLimitConfig({ ...validConfig, VERCEL: undefined })).toThrow();
+
+    const accepted = dependencies();
+    await expect(loginWithRateLimit(request(), accepted)).resolves.toEqual(success);
+    expect(accepted.consume).toHaveBeenCalledOnce();
+
+    for (const headers of [{}, { "x-forwarded-for": "invalid" }, { "x-forwarded-for": "203.0.113.7, 198.51.100.2" }]) {
+      const rejected = dependencies();
+      await expect(loginWithRateLimit(request({ headers }), rejected)).resolves.toEqual(genericFailure);
+      expect(rejected.consume).not.toHaveBeenCalled();
     }
   });
 
@@ -187,11 +256,21 @@ describe("login rate-limit service contract", () => {
     }
   });
 
-  it("reads the actual server environment boundary and restores process state", () => {
+  it("reads both supported modes only from the actual process environment boundary", () => {
     Object.assign(process.env, validConfig);
     expect(readServerEnv()).toEqual(validConfig);
 
+    Object.assign(process.env, localhostDevelopmentConfig);
     delete process.env.VERCEL;
+    expect(readServerEnv()).toEqual({
+      ...localhostDevelopmentConfig,
+      VERCEL: undefined,
+    });
+
+    Object.assign(process.env, { NODE_ENV: "production" });
+    expect(() => readServerEnv()).toThrow();
+
+    Object.assign(process.env, { NODE_ENV: "development", VERCEL: "1" });
     expect(() => readServerEnv()).toThrow();
   });
 

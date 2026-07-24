@@ -36,8 +36,9 @@ import { createLoginAction } from "../../../src/actions/create-login-action";
 import { parseLoginRateLimitConfig } from "../../../src/server/services/login-service";
 
 const environment = {
+  NODE_ENV: "production" as const,
   VERCEL: "1" as const,
-  LOGIN_TRUSTED_PROXY_MODE: "vercel-direct" as const,
+  LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE: "vercel-direct" as const,
   LOGIN_RATE_LIMIT_ATTEMPTS: "5" as const,
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: "900" as const,
   LOGIN_RATE_LIMIT_DIGEST_SECRET: "a".repeat(64),

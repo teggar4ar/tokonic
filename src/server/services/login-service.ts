@@ -8,8 +8,8 @@ const genericFailure = { ok: false, error: "invalid" } as const;
 const success = { ok: true } as const;
 
 export type LoginRateLimitConfig = {
-  deployment: "vercel";
-  proxyMode: "vercel-direct";
+  deployment: "vercel" | "localhost-development";
+  proxyMode: "vercel-direct" | "localhost-development";
   attempts: 5;
   windowSeconds: 900;
   digestSecret: string;
@@ -32,9 +32,12 @@ export type LoginBoundaryDependencies<Environment> = {
 };
 
 export function parseLoginRateLimitConfig(env: Record<string, string | undefined>): LoginRateLimitConfig {
+  const proxyMode = env.LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE;
+  const validVercel = proxyMode === "vercel-direct" && env.VERCEL === "1";
+  const validLocalhost = proxyMode === "localhost-development" && env.NODE_ENV !== "production" && env.VERCEL === undefined;
+
   if (
-    env.VERCEL !== "1" ||
-    env.LOGIN_TRUSTED_PROXY_MODE !== "vercel-direct" ||
+    (!validVercel && !validLocalhost) ||
     env.LOGIN_RATE_LIMIT_ATTEMPTS !== "5" ||
     env.LOGIN_RATE_LIMIT_WINDOW_SECONDS !== "900" ||
     !env.LOGIN_RATE_LIMIT_DIGEST_SECRET ||
@@ -44,8 +47,8 @@ export function parseLoginRateLimitConfig(env: Record<string, string | undefined
   }
 
   return {
-    deployment: "vercel",
-    proxyMode: "vercel-direct",
+    deployment: validVercel ? "vercel" : "localhost-development",
+    proxyMode,
     attempts: 5,
     windowSeconds: 900,
     digestSecret: env.LOGIN_RATE_LIMIT_DIGEST_SECRET,
@@ -123,8 +126,10 @@ export async function loginWithRateLimit(
       return genericFailure;
     }
 
-    const forwardedFor = readForwardedFor(input.headers);
-    const canonicalIp = canonicalizeTrustedClientIp(forwardedFor ?? "");
+    const canonicalIp =
+      input.config.proxyMode === "localhost-development"
+        ? "127.0.0.1"
+        : canonicalizeTrustedClientIp(readForwardedFor(input.headers) ?? "");
     const digests = deriveLoginDigests({
       email: parsed.data.email,
       canonicalIp,
