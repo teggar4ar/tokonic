@@ -8,7 +8,6 @@ async function main() {
   if (dryRun) {
     console.log("Dry run: environment validated successfully.");
     console.log(`Target: ${env.API_URL}`);
-    console.log(`Admin email: ${env.CI_ADMIN_EMAIL}`);
     console.log(`Store slug: ${env.CI_ADMIN_STORE_SLUG}`);
     return;
   }
