@@ -137,7 +137,7 @@ Do not mark the relevant phase done until its required items are automated.
 - [x] Seller migration contains expected RLS ownership predicates — static SQL contract only.
 - [x] The GitHub Actions disposable stack executes migrations cleanly from an empty database on every branch push; TASK-007B evidence is recorded in `implementation-plan.md`.
 - [x] PostgreSQL login limiter tests prove two-bucket allowed attempts, atomic throttling under concurrency, reset, key isolation, restricted grants, successful-login email-bucket deletion, and idempotent cleanup. Evidence: https://github.com/teggar4ar/tokonic/actions/runs/30076650889.
-- [ ] **Not yet implemented:** login service tests prove trusted-client identity handling, generic failures, operation ordering, and fail-closed database/configuration behavior.
+- [x] Login service tests prove trusted-client identity handling, generic failures, operation ordering, and fail-closed database/configuration behavior. Evidence: https://github.com/teggar4ar/tokonic/actions/runs/30081482977.
 - [ ] **Not yet implemented:** RLS matrix proves anon cannot read, owner can access, and a second unrelated authenticated user reads/mutates zero rows.
 - [ ] **Not yet implemented:** admin service rejects no-session and unrelated users.
 
