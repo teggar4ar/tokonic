@@ -35,7 +35,7 @@ function rpcFor(client: SupabaseClient): Rpc {
   return client.rpc.bind(client) as unknown as Rpc;
 }
 
-function readLimiterColumns(): string[] {
+function queryDisposableDatabase<T>(query: string): T[] {
   readDisposableStackEnvironment();
   const databaseUrl = process.env.DB_URL;
   if (!databaseUrl) throw new Error("Missing required Supabase env var \"DB_URL\".");
@@ -46,18 +46,48 @@ function readLimiterColumns(): string[] {
   const cli = resolve("node_modules", ".bin", process.platform === "win32" ? "supabase.cmd" : "supabase");
   const output = execFileSync(
     cli,
-    [
-      "db",
-      "query",
-      "--db-url",
-      databaseUrl,
-      "--output-format",
-      "json",
-      "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'login_rate_limit_buckets' order by column_name",
-    ],
+    ["db", "query", "--db-url", databaseUrl, "--output-format", "json", query],
     { encoding: "utf8", windowsHide: true },
   );
-  return (JSON.parse(output) as Array<{ column_name: string }>).map(({ column_name }) => column_name);
+  return JSON.parse(output) as T[];
+}
+
+function readLimiterColumns(): string[] {
+  return queryDisposableDatabase<{ column_name: string }>(
+    "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'login_rate_limit_buckets' order by column_name",
+  ).map(({ column_name }) => column_name);
+}
+
+function readFunctionSecurityContract() {
+  return queryDisposableDatabase<{
+    signature: string;
+    schema_name: string;
+    function_name: string;
+    security_definer: boolean;
+    empty_search_path: boolean;
+  }>(
+    "select p.oid::regprocedure::text as signature, n.nspname as schema_name, p.proname as function_name, p.prosecdef as security_definer, coalesce(p.proconfig, array[]::text[]) = array['search_path=\"\"']::text[] as empty_search_path from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace where p.oid in (pg_catalog.to_regprocedure('public.consume_login_rate_limit(text,text,timestamp with time zone)'), pg_catalog.to_regprocedure('public.delete_login_rate_limit_email_bucket(text)'), pg_catalog.to_regprocedure('public.cleanup_login_rate_limit_buckets(timestamp with time zone)'), pg_catalog.to_regprocedure('private.consume_login_rate_limit_bucket(text,text,timestamp with time zone)'), pg_catalog.to_regprocedure('private.consume_login_rate_limit(text,text,timestamp with time zone)'), pg_catalog.to_regprocedure('private.delete_login_rate_limit_email_bucket(text)'), pg_catalog.to_regprocedure('private.cleanup_login_rate_limit_buckets(timestamp with time zone)')) order by p.oid::regprocedure::text",
+  );
+}
+
+function readPrivilegeContract() {
+  return queryDisposableDatabase<{
+    role_name: string;
+    private_schema_usage: boolean;
+    table_select: boolean;
+    table_insert: boolean;
+    table_update: boolean;
+    table_delete: boolean;
+    public_consume_execute: boolean;
+    public_delete_execute: boolean;
+    public_cleanup_execute: boolean;
+    private_consume_execute: boolean;
+    private_delete_execute: boolean;
+    private_cleanup_execute: boolean;
+    private_helper_execute: boolean;
+  }>(
+    "with roles(role_name, role_oid) as (values ('PUBLIC', 0::oid), ('anon', pg_catalog.to_regrole('anon')::oid), ('authenticated', pg_catalog.to_regrole('authenticated')::oid), ('service_role', pg_catalog.to_regrole('service_role')::oid)) select role_name, pg_catalog.has_schema_privilege(role_oid, 'private', 'USAGE') as private_schema_usage, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'SELECT') as table_select, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'INSERT') as table_insert, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'UPDATE') as table_update, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'DELETE') as table_delete, pg_catalog.has_function_privilege(role_oid, 'public.consume_login_rate_limit(text,text,timestamp with time zone)', 'EXECUTE') as public_consume_execute, pg_catalog.has_function_privilege(role_oid, 'public.delete_login_rate_limit_email_bucket(text)', 'EXECUTE') as public_delete_execute, pg_catalog.has_function_privilege(role_oid, 'public.cleanup_login_rate_limit_buckets(timestamp with time zone)', 'EXECUTE') as public_cleanup_execute, pg_catalog.has_function_privilege(role_oid, 'private.consume_login_rate_limit(text,text,timestamp with time zone)', 'EXECUTE') as private_consume_execute, pg_catalog.has_function_privilege(role_oid, 'private.delete_login_rate_limit_email_bucket(text)', 'EXECUTE') as private_delete_execute, pg_catalog.has_function_privilege(role_oid, 'private.cleanup_login_rate_limit_buckets(timestamp with time zone)', 'EXECUTE') as private_cleanup_execute, pg_catalog.has_function_privilege(role_oid, 'private.consume_login_rate_limit_bucket(text,text,timestamp with time zone)', 'EXECUTE') as private_helper_execute from roles order by role_name",
+  );
 }
 
 function limiterRpc(client: ReturnType<typeof createServiceRoleClient>) {
@@ -249,6 +279,54 @@ describe("PostgreSQL login rate limiter", () => {
     expect(exactBoundaryAfterCleanup.error).toBeNull();
     expect(exactBoundaryAfterCleanup.data).toEqual(exactBoundaryBeforeCleanup.data);
     await expectAllowed(await limiter.consume(digests.ipC, digests.emailC, "2026-07-24T23:45:02.000Z"), true);
+  });
+
+  it("uses invoker public wrappers and definer private implementations with empty search paths", () => {
+    const functions = readFunctionSecurityContract();
+
+    expect(functions).toHaveLength(7);
+    expect(functions.map(({ signature }) => signature).sort()).toEqual([
+      "private.cleanup_login_rate_limit_buckets(timestamp with time zone)",
+      "private.consume_login_rate_limit(text,text,timestamp with time zone)",
+      "private.consume_login_rate_limit_bucket(text,text,timestamp with time zone)",
+      "private.delete_login_rate_limit_email_bucket(text)",
+      "cleanup_login_rate_limit_buckets(timestamp with time zone)",
+      "consume_login_rate_limit(text,text,timestamp with time zone)",
+      "delete_login_rate_limit_email_bucket(text)",
+    ].sort());
+    expect(functions.filter(({ schema_name }) => schema_name === "public").every(
+      ({ security_definer, empty_search_path }) => !security_definer && empty_search_path,
+    )).toBe(true);
+    expect(functions.filter(({ schema_name }) => schema_name === "private").every(
+      ({ security_definer, empty_search_path }) => security_definer && empty_search_path,
+    )).toBe(true);
+  });
+
+  it("grants only the privileges required by invoker wrappers", () => {
+    const privileges = readPrivilegeContract();
+    const deniedRoles = privileges.filter(({ role_name }) => role_name !== "service_role");
+    const serviceRole = privileges.find(({ role_name }) => role_name === "service_role");
+
+    expect(deniedRoles).toHaveLength(3);
+    for (const { role_name, ...grants } of deniedRoles) {
+      expect(["PUBLIC", "anon", "authenticated"]).toContain(role_name);
+      expect(Object.values(grants).every((granted) => !granted)).toBe(true);
+    }
+    expect(serviceRole).toEqual({
+      role_name: "service_role",
+      private_schema_usage: true,
+      table_select: false,
+      table_insert: false,
+      table_update: false,
+      table_delete: false,
+      public_consume_execute: true,
+      public_delete_execute: true,
+      public_cleanup_execute: true,
+      private_consume_execute: true,
+      private_delete_execute: true,
+      private_cleanup_execute: true,
+      private_helper_execute: false,
+    });
   });
 
   it("stores exactly the digest-only limiter columns", () => {
