@@ -48,6 +48,15 @@ jobs:
     name: Disposable Supabase integration tests
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      CI_ADMIN_EMAIL: ci-admin@example.test
+      CI_ADMIN_STORE_NAME: CI Test Store
+      CI_ADMIN_STORE_SLUG: ci-test-store
+      CI_ADMIN_WHATSAPP_PHONE: "6280000000000"
+      CI_ADMIN_ORIGIN_LABEL: TAJUR HALANG, BOGOR, JAWA BARAT, 16320
+      CI_ADMIN_ORIGIN_ADDRESS: Alamat pengujian nonproduksi
+      CI_ADMIN_ORIGIN_RAJAONGKIR_ID: "8583"
+      CI_ADMIN_ORIGIN_RAJAONGKIR_LEVEL: subdistrict
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -65,6 +74,9 @@ jobs:
         with:
           version: "2.109.1"
 
+      - name: Generate CI admin password
+        run: echo "CI_ADMIN_PASSWORD=$(openssl rand -base64 24)" >> "$GITHUB_ENV"
+
       - name: Start disposable Supabase stack
         run: supabase start
 
@@ -73,6 +85,28 @@ jobs:
 
       - name: Lint database schema
         run: npm run db:lint
+
+      - name: Dry-run provisioning validation
+        shell: bash
+        run: |
+          env_file="$RUNNER_TEMP/supabase.env"
+          supabase status -o env > "$env_file"
+          set -a
+          . "$env_file"
+          set +a
+          rm -f "$env_file"
+          npx tsx scripts/provision-ci-admin.ts --dry-run
+
+      - name: Provision CI test admin
+        shell: bash
+        run: |
+          env_file="$RUNNER_TEMP/supabase.env"
+          supabase status -o env > "$env_file"
+          set -a
+          . "$env_file"
+          set +a
+          rm -f "$env_file"
+          npx tsx scripts/provision-ci-admin.ts
 
       - name: Run integration tests
         shell: bash

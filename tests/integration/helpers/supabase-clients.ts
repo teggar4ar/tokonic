@@ -44,5 +44,24 @@ export function createServiceRoleClient(): SupabaseClient<Database> {
   return buildClient(environment.serviceRoleKey, environment.url);
 }
 
-export const SELLER_SEED_AUTH_USER_ID = "11111111-1111-4111-8111-111111111111";
-export const SELLER_SEED_STORE_SLUG = "tokonic-development";
+export function readProvisionedAdmin() {
+  return {
+    email: requiredEnv("CI_ADMIN_EMAIL"),
+    password: requiredEnv("CI_ADMIN_PASSWORD"),
+    storeSlug: requiredEnv("CI_ADMIN_STORE_SLUG"),
+  };
+}
+
+export async function createAuthenticatedAdminClient(): Promise<SupabaseClient<Database>> {
+  const env = readDisposableStackEnvironment();
+  const admin = readProvisionedAdmin();
+  const client = buildClient(env.anonKey, env.url);
+  const { error } = await client.auth.signInWithPassword({
+    email: admin.email,
+    password: admin.password,
+  });
+  if (error) {
+    throw new Error(`Failed to sign in as provisioned admin: ${error.message}`);
+  }
+  return client;
+}
