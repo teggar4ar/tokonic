@@ -86,6 +86,19 @@ jobs:
       - name: Lint database schema
         run: npm run db:lint
 
+      - name: Generate database types
+        run: npm run db:types
+
+      - name: Verify generated database types are committed
+        run: git diff --exit-code -- src/lib/supabase/database.types.ts
+
+      - name: Upload generated database types
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: generated-database-types
+          path: src/lib/supabase/database.types.ts
+
       - name: Dry-run provisioning validation
         shell: bash
         run: |
