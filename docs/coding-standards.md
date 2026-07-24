@@ -39,6 +39,7 @@ The Phase 1 direct seller query previously found in the login page has been move
 - Own domain decisions, sequencing, invariants, and transactions.
 - Call `requireAdmin()` independently for every protected admin operation, even when the entry point already checked.
 - Call typed data modules and normalized provider adapters.
+- Services may depend on a narrow rate-limit data interface for deterministic tests; they never own process-local production limiter state.
 - Never import React, UI components, `next/navigation`, or form-specific types.
 - Return domain/view data or throw typed `AppError`; never return raw Supabase/provider responses.
 
@@ -50,6 +51,7 @@ The Phase 1 direct seller query previously found in the login page has been move
 - Scope seller-owned queries with the `sellerId` returned by `requireAdmin()`; do not trust a client-supplied seller ID.
 - Return selected rows or safe mapped values; do not leak raw database errors.
 - Do not own multi-step business rules or call provider adapters.
+- The PostgreSQL login limiter uses a dedicated `server-only` data module that owns the privileged RPC call and maps only an allow/deny result; it never exposes raw limiter rows or privileged Supabase responses.
 
 ### Providers: `src/server/providers/`
 
@@ -108,6 +110,11 @@ UI / Page
 Server Component simple read
   -> Data
 
+Login action
+  -> Login service
+    -> Rate-limit data adapter
+      -> Restricted PostgreSQL function
+
 Data / Service
   -> requireAdmin, server Supabase client, domain helpers, errors
 ```
@@ -161,6 +168,7 @@ type ActionResult<T = undefined> =
 ```
 
 - Log only sanitized identifiers and stable codes. Never log passwords, tokens, secrets, full phones, or full addresses.
+- Limiter unavailability and throttling may be distinguished internally only when operationally safe, but the login entry point maps both to the same generic public failure. Never attach raw credentials, client headers, limiter keys, or privileged database errors to browser-visible errors.
 
 ## Do / Don't
 

@@ -18,13 +18,13 @@ Established conventions:
 - Prefer explicit assertions such as `toBe`, `toContain`, and `toMatch` over broad snapshots.
 - Pure unit tests have no setup/teardown when no shared state exists.
 - No Supabase client is mocked in the current baseline.
-- No test currently starts a CI-hosted disposable Supabase stack or connects to Supabase at runtime; the operator's machine is not expected to run Docker.
+- The GitHub Actions workflow now starts a CI-hosted disposable Supabase stack, replays migrations, runs integration suites, and tears down; the operator's machine is not expected to run Docker.
 - `seller-migration.test.ts` is a static SQL contract test, **not** proof that migrations execute or RLS works at runtime.
 - There is no project `vitest.config.*` yet; `npm test` runs Vitest defaults.
 
 Current gaps relative to the TDD:
 
-- [ ] No GitHub Actions PostgreSQL/Supabase integration workflow exists yet.
+- [x] GitHub Actions PostgreSQL/Supabase integration workflow exists and runs on every branch push; TASK-007B evidence is recorded in `implementation-plan.md`.
 - [ ] No runtime RLS matrix test exists for anon/admin/unrelated authenticated user.
 - [ ] No route/service integration tests exist.
 - [ ] No automated auth session/cookie test exists; login/logout remains manual E2E.
@@ -87,6 +87,8 @@ Rules:
 - Reset/clean state between tests or suites; do not depend on execution order.
 - Assert database state after the operation, not only returned status.
 - Static SQL text assertions may supplement but never replace runtime database tests.
+
+PostgreSQL-backed rate limiting is a database integration concern. Write the failing database test first, then the migration, push the smallest coherent commit, and use the resulting CI run as the red/green feedback loop. A local fake may test service response mapping but is not evidence of durable or concurrent limiting.
 - A database gate is complete only when the pushed commit has a green workflow run and its URL is recorded as evidence.
 
 ### CI-Only Setup and Feedback Loop
@@ -110,6 +112,7 @@ Use for boundaries involving services, provider adapters, authorization, or safe
 - RajaOngkir live verification belongs to a controlled smoke/manual test; deterministic tests use recorded validated fixtures.
 - Assert both accepted and adversarial inputs: tampered totals, invalid signatures, missing sessions, unrelated users, malformed provider responses.
 - Verify public error shape and absence of internal/PII fields.
+- Mock the narrow limiter data adapter only to verify login-boundary ordering, generic responses, trusted-client identity handling, and fail-closed behavior. Never use a process-local `Map` as the production provider or as proof of database atomicity.
 
 ### Manual End-to-End
 
@@ -132,7 +135,9 @@ Do not mark the relevant phase done until its required items are automated.
 
 - [x] Login Zod validation basics — unit contract exists.
 - [x] Seller migration contains expected RLS ownership predicates — static SQL contract only.
-- [ ] **Not yet implemented:** the GitHub Actions disposable stack executes migrations cleanly from an empty database on every branch push.
+- [x] The GitHub Actions disposable stack executes migrations cleanly from an empty database on every branch push; TASK-007B evidence is recorded in `implementation-plan.md`.
+- [ ] **Not yet implemented:** PostgreSQL login limiter tests prove two-bucket allowed attempts, atomic throttling under concurrency, reset, key isolation, restricted grants, successful-login email-bucket deletion, and idempotent cleanup.
+- [ ] **Not yet implemented:** login service tests prove trusted-client identity handling, generic failures, operation ordering, and fail-closed database/configuration behavior.
 - [ ] **Not yet implemented:** RLS matrix proves anon cannot read, owner can access, and a second unrelated authenticated user reads/mutates zero rows.
 - [ ] **Not yet implemented:** admin service rejects no-session and unrelated users.
 
@@ -215,6 +220,7 @@ For integration suites:
 - Fix time, UUIDs, and provider responses when determinism matters.
 - Concurrency tests issue genuinely overlapping database operations and assert final persisted state.
 - Never place real buyer data, provider secrets, or operator credentials in fixtures.
+- Limiter fixtures use synthetic identities and fixed timestamps; never include operator email, raw IP, password, digest secret, forwarding-header chain, or shared-remote credentials in fixtures or failure output.
 
 ## What Not to Test
 

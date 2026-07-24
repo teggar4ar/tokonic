@@ -42,6 +42,7 @@ This document does not redefine product scope. PRD Section 6 owns MVP exclusions
 | Database | Supabase PostgreSQL |
 | Data access | Typed `@supabase/supabase-js` clients plus PostgreSQL functions for atomic workflows |
 | Admin authentication | Supabase Auth through `@supabase/ssr` |
+| Login abuse protection | Atomic durable rate limiting in Supabase PostgreSQL; no Vercel instance-memory counters |
 | Image storage | Public Supabase Storage bucket with authenticated writes |
 | UI | ReUI/shadcn-compatible components, Tailwind CSS, Heroicons |
 | Cart implementation | React Context persisted in `localStorage` |
@@ -85,7 +86,7 @@ Supabase      RajaOngkir    Duitku POP
 | Next.js Server Components | Public/admin reads, initial rendering, metadata, authorization-aware page composition |
 | Next.js Server Actions | Authenticated admin mutations and checkout orchestration invoked from application forms |
 | Next.js Route Handlers | Duitku callbacks, payment initiation endpoint when required by POP client flow, RajaOngkir proxy/search endpoints, guest order lookup if implemented as fetch API |
-| PostgreSQL | Durable records, constraints, indexes, RLS, atomic payment/inventory function, summaries |
+| PostgreSQL | Durable records, constraints, indexes, RLS, atomic login rate limiting, atomic payment/inventory function, summaries |
 | Supabase Auth | Single seller-admin identity and session lifecycle |
 | Supabase Storage | Public product/store images with policy-protected writes |
 
@@ -669,7 +670,8 @@ Prefer narrow server-side queries for public pages even when RLS allows anonymou
 
 - Revoke function execution from `PUBLIC` by default.
 - Grant each function only to the role that needs it.
-- Payment webhook functions are invoked by trusted server code, not public RPC clients.
+- Payment webhook and login-limiter functions are invoked by trusted server code, not public RPC clients.
+- The login limiter function is unavailable to browser, `anon`, and authenticated Supabase clients; only the narrow server-side caller may invoke it.
 - Prefer `SECURITY INVOKER`.
 - If `SECURITY DEFINER` is necessary, place it in a non-exposed schema, set an empty/safe `search_path`, fully qualify all objects, revoke execution from `PUBLIC`, `anon`, and `authenticated`, and grant only to the intended privileged role.
 
@@ -757,6 +759,16 @@ Product deletion/unpublish must enumerate associated object paths if hard deleti
 3. On success, session cookies are set through the supported SSR flow.
 4. Redirect to `/admin`.
 5. Return a generic error on failure.
+
+### 10.2.1 Login Rate Limiting
+
+Login rate limiting uses a durable Supabase PostgreSQL table and atomic consume function. The login boundary verifies the current official Vercel trusted-client-IP contract before implementation, canonicalizes the trusted client IP and normalized email, transforms each into a separate irreversible keyed digest with a dedicated server-only secret, and consumes both buckets before calling Supabase Auth. Each bucket allows five attempts per 15-minute window. The system never stores or logs the submitted password, raw email, raw IP address, Auth token, full forwarding-header chain, digest secret, or complete limiter key.
+
+The consume operation atomically creates or updates one bucket, resets expired windows, increments allowed attempts, and returns only an allow/deny result with bounded reset metadata. Concurrent requests for either digest must not exceed the configured limit. Invalid input, throttling, limiter/configuration failure, missing or untrusted client identity, and Supabase credential rejection all produce the same generic public login failure. After successful authentication, the service deletes only the normalized-email bucket; the client-IP bucket remains until expiry.
+
+The limiter table has RLS enabled and no direct browser, `anon`, or `authenticated` access. Revoke table and function access from `PUBLIC`, `anon`, and `authenticated`; grant execution only to the narrow trusted server role. The atomic function resides in a non-exposed schema. If `SECURITY DEFINER` is required, it uses a safe `search_path`, fully qualified objects, explicit internal validation, and narrow grants. Access occurs through a dedicated `server-only` data module using a privileged client only for this operation.
+
+An idempotent manual operator cleanup removes buckets expired for more than 48 hours and reports only aggregate counts and stable outcomes. The consume path remains correct if cleanup has not run. Configuration is required and fixed to five attempts per 15 minutes, with a dedicated high-entropy digest secret and the verified trusted-proxy mode. Missing or malformed configuration, missing database/function availability, or untrusted client identity fails closed; the application never falls back to process memory or writable files. Rotating the digest secret intentionally invalidates existing buckets.
 
 ### 10.3 Session Verification
 
@@ -1409,6 +1421,7 @@ Public:
 - Verify Duitku callback signature and amount.
 - Normalize phone/order lookup inputs.
 - Apply rate limits to login, recovery, shipping search/rates, checkout/payment creation, and order lookup.
+- Trust login client identity only through the current officially verified Vercel/proxy header contract; do not accept an arbitrary caller-supplied forwarding header without validating the deployment trust boundary.
 - Never interpolate user input into raw SQL.
 
 ### 22.3 RLS Verification
@@ -1438,6 +1451,7 @@ Never log:
 - Duitku/RajaOngkir secrets.
 - Full buyer addresses or phones.
 - Complete raw callback payloads without sanitization.
+- Raw login emails, raw client IPs, full forwarding-header chains, rate-limit digest secrets, or complete limiter keys.
 
 Use:
 
@@ -1467,6 +1481,11 @@ DUITKU_API_KEY
 DUITKU_CALLBACK_URL
 DUITKU_RETURN_URL
 DUITKU_EXPIRY_PERIOD
+LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+LOGIN_RATE_LIMIT_WINDOW_SECONDS
+LOGIN_RATE_LIMIT_KEY_SECRET
+LOGIN_RATE_LIMIT_TRUSTED_PROXY_MODE
+LOGIN_RATE_LIMIT_RETENTION_SECONDS
 ```
 
 Rules:
@@ -1476,6 +1495,8 @@ Rules:
 - Maintain `.env.example` without values.
 - Use distinct Duitku sandbox and production configuration.
 - Fail fast when required configuration is absent.
+- Login rate-limit configuration is server-only and required wherever login is enabled: five attempts, a 900-second window, a dedicated high-entropy digest secret, the verified Vercel trusted-proxy mode, and a 172800-second cleanup retention threshold.
+- Do not silently default or fall back to in-memory limiting. The trusted-proxy mode must match the verified deployment contract.
 
 ---
 
@@ -1494,6 +1515,8 @@ Use Supabase CLI and migration files as the source of truth. The operator's mach
 7. Generate/check TypeScript database types and run database lint and applicable advisors.
 8. Tear down the disposable stack even when a step fails.
 9. Record the green workflow run URL as gate evidence before applying reviewed migrations to development/staging and later production.
+
+A limiter migration is tested only in the disposable CI stack. After the pushed commit is green and its workflow URL is recorded, apply the reviewed migration to each target Supabase project before deploying application code that calls the limiter. Vercel does not apply Supabase migrations. If the limiter schema or function is unavailable, login fails closed with the generic failure.
 
 Do not make untracked production schema edits through the dashboard.
 
@@ -1551,6 +1574,7 @@ Run only against a CI-hosted disposable Supabase PostgreSQL stack started by the
 - Expiration cancels pending order without stock changes.
 - Order snapshots survive product updates/unpublish/delete behavior.
 - Retention function anonymizes only eligible orders.
+- Login limiter allows five attempts per independent IP and email digest, atomically throttles genuinely concurrent requests, resets after 15 minutes, isolates keys, restricts direct table/function access, deletes only the email bucket after successful login, and idempotently cleans rows expired for more than 48 hours.
 
 ### 25.3 Route/Service Integration Tests
 
@@ -1560,6 +1584,7 @@ Run only against a CI-hosted disposable Supabase PostgreSQL stack started by the
 - Callback rejects invalid signature, amount, merchant ID, and unknown order.
 - Guest lookup requires both order code and normalized phone.
 - Admin service rejects no-session and unrelated users.
+- Login service verifies the trusted-client identity boundary, canonicalizes before digest derivation, consumes both durable buckets before Auth, deletes only the email bucket on success, and maps validation, throttling, missing identity, configuration, database, and credential failures to the same generic public result.
 
 ### 25.4 Manual End-to-End Tests
 
@@ -1669,15 +1694,16 @@ A separate Supabase staging project is desirable but optional under Free plan ac
 
 ### 28.2 Deployment Sequence
 
-1. Apply reviewed Supabase migrations.
-2. Generate/verify database types.
-3. Configure Auth redirect URLs.
-4. Configure Storage bucket and policies.
-5. Configure Vercel environment variables.
-6. Deploy Next.js.
-7. Configure Duitku callback/return URLs.
-8. Run smoke tests.
-9. Verify RLS and webhook behavior.
+1. Confirm the pushed commit's disposable database workflow is green and record its run URL.
+2. Apply reviewed Supabase migrations to each target project before dependent application code; verify grants and function availability with a non-destructive smoke check.
+3. Generate/verify database types.
+4. Configure Auth redirect URLs.
+5. Configure Storage bucket and policies.
+6. Configure Vercel environment variables.
+7. Deploy Next.js.
+8. Configure Duitku callback/return URLs.
+9. Run smoke tests.
+10. Verify RLS and webhook behavior.
 
 ### 28.3 Rollback
 
@@ -1748,7 +1774,7 @@ These items do not change the resolved product architecture but must be finalize
 2. **Implementation-blocking:** Confirm exact RajaOngkir V2 cost endpoint fields, enabled couriers, account quota, and response schema before checkout integration.
 3. Decide whether payment creation uses a Route Handler exclusively or a thin Server Action that calls the same service.
 4. Decide whether guest order detail uses a same-page response or short-lived signed lookup cookie.
-5. **Security-blocking:** Select and verify the rate-limit mechanism before exposing public lookup, shipping, and payment-creation endpoints.
+5. **Resolved mechanism; implementation verification remains:** Supabase PostgreSQL is the durable login rate-limit backend with separate keyed digests for trusted client IP and normalized email, five attempts per 15 minutes, email-bucket deletion after successful login, and manual cleanup after 48 hours. Before TASK-010B coding, verify the current official Vercel trusted-client-IP header contract and record the selected mode. Public lookup, shipping, and payment-creation endpoint rate-limit contracts remain implementation-blocking in their respective tasks.
 6. Decide whether a separate `payment_attempts` table is needed after retry behavior is tested.
 7. Decide whether store logo uses `product-images/store/` or a separate bucket.
 8. Decide whether client image compression preserves input format or consistently converts supported inputs to WebP after compatibility testing.

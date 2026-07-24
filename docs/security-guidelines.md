@@ -4,7 +4,7 @@ Use this checklist for every security-relevant code review. `AGENTS.md` and `tok
 
 ## Known Issues Found During Audit
 
-- [ ] **Login rate limiting is not implemented.** Add a reviewed rate-limit mechanism before exposing the admin login publicly; keep all failure responses generic.
+- [ ] **PostgreSQL login rate limiting is selected but not complete.** Implement and deploy the migration/function plus login integration before exposing the admin login publicly; keep validation, throttling, dependency failure, and credential failure generic and indistinguishable.
 - [ ] **Remote Supabase leaked-password protection is disabled.** Enable it in Supabase Auth settings before production use.
 - [ ] **Runtime RLS matrix tests are incomplete.** Add integration tests for `anon`, the linked admin, and a second unrelated authenticated user. Existing tests inspect the SQL contract but do not execute the full identity matrix.
 
@@ -42,6 +42,10 @@ Phase 1 otherwise follows the mandatory ownership, session-verification, and key
 - [ ] Logout securely verifies the current Auth user, clears the SSR session through Supabase, handles failure generically, and redirects to `/admin/login`.
 - [ ] Public signup remains disabled in the remote Supabase Auth configuration; provisioning is operator-controlled.
 - [ ] Password recovery redirects are allowlisted to Tokonic domains and the reset page verifies the recovery session before accepting a new password.
+- [ ] Invoke the durable PostgreSQL limiter before Supabase Auth password verification.
+- [ ] Use separate keyed digests for canonical trusted client IP and normalized email; never store or log passwords, raw emails, raw IPs, full forwarding-header chains, or digest secrets.
+- [ ] Derive client identity only from the officially verified Vercel trusted-proxy contract. Missing/untrusted identity, malformed configuration, or database/function failure denies login generically; never fall back to process memory.
+- [ ] Validation, throttling, dependency failure, unknown accounts, and invalid credentials remain publicly indistinguishable.
 - [ ] Apply rate limits to login and recovery endpoints before public deployment.
 
 ## Row Level Security
@@ -58,6 +62,9 @@ Phase 1 otherwise follows the mandatory ownership, session-verification, and key
 - [ ] Revoke function execution from `PUBLIC` by default; prefer `SECURITY INVOKER`.
 - [ ] Any necessary `SECURITY DEFINER` function uses a safe/empty `search_path`, fully qualified objects, explicit internal authorization, and narrowly granted execution.
 - [ ] Test each policy as `anon`, the owning admin, and a second unrelated authenticated user; the unrelated user must read and mutate zero rows.
+- [ ] The limiter table has RLS enabled with no browser, `anon`, or authenticated direct access; revoke its table/function privileges from `PUBLIC`, `anon`, and `authenticated` and grant only the narrow trusted server caller.
+- [ ] If the atomic limiter function uses `SECURITY DEFINER`, place it in a non-exposed schema with a safe `search_path`, fully qualified objects, and narrow execution grants.
+- [ ] Test limiter grants, concurrency, reset, successful-login email-bucket deletion, and cleanup in the CI disposable stack.
 - [ ] Run Supabase security and performance advisors after every database migration.
 
 ## Server-Side Input and Commerce Integrity
@@ -115,5 +122,7 @@ Phase 1 otherwise follows the mandatory ownership, session-verification, and key
 - [ ] Authentication, authorization, validation, RLS, and least-privilege grants are independently reviewed.
 - [ ] `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build` pass.
 - [ ] Database changes pass `npm run db:lint`, migration dry-run, generated-type review, and Supabase advisors.
+- [ ] Record the green disposable-database workflow URL before applying the reviewed limiter migration remotely.
+- [ ] Apply the limiter migration before dependent application code and verify login fails closed if the function is unavailable.
 - [ ] `npm audit` findings are triaged by reachability and fix availability; never run forced remediation automatically.
 - [ ] No secret or unnecessary PII appears in source, fixtures, responses, or logs.
