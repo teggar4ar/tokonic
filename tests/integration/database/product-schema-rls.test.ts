@@ -483,7 +483,9 @@ describe("product schema — foreign keys and cascades", () => {
     expect(parseInt(beforeDelete[0].count)).toBe(1);
 
     // Delete the product
-    queryDisposableDatabase(`delete from public.products where id = '${tempId}'`);
+    queryDisposableDatabase(
+      `delete from public.products where id = '${tempId}' returning id`,
+    );
 
     // Verify images were cascade-deleted
     const afterDelete = queryDisposableDatabase<{ count: string }>(
