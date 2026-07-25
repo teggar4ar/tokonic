@@ -201,7 +201,8 @@ describe("product image Storage", () => {
     ).toBeNull();
 
     const unrelatedDelete = await unrelatedClient.storage.from(bucketName).remove([path]);
-    expect(unrelatedDelete.error).not.toBeNull();
+    expect(unrelatedDelete.error).toBeNull();
+    expect(unrelatedDelete.data).toHaveLength(0);
     expect((await anonClient.storage.from(bucketName).download(path)).error).toBeNull();
 
     const ownerDelete = await ownerClient.storage.from(bucketName).remove([path]);
