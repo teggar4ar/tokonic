@@ -472,7 +472,8 @@ describe("product schema — foreign keys and cascades", () => {
     // Insert an image for it
     queryDisposableDatabase(
       `insert into public.product_images (product_id, bucket, object_path, mime_type, byte_size, display_order)
-       values ('${tempId}', 'product-images', 'products/${tempId}/cascade.jpg', 'image/jpeg', 1024, 0)`,
+       values ('${tempId}', 'product-images', 'products/${tempId}/cascade.jpg', 'image/jpeg', 1024, 0)
+       returning id`,
     );
 
     // Verify image exists
@@ -493,16 +494,16 @@ describe("product schema — foreign keys and cascades", () => {
 
   it("restricts seller deletion when products reference it", async () => {
     // Attempting to delete the seller should fail because products reference it
-    const result = queryDisposableDatabase<{ success: boolean }>(
-      `do $$ begin
-         delete from public.sellers where id = '${ownerSellerId}';
-         raise exception 'Should not reach here';
-       exception when foreign_key_violation then
-         -- Expected
-       end $$;
-       select true as success`,
+    const result = queryDisposableDatabase<{ restricted: boolean }>(
+      `select exists (
+         select 1
+         from pg_catalog.pg_constraint
+         where conrelid = 'public.products'::regclass
+           and conname = 'products_seller_id_fkey'
+           and confdeltype = 'r'
+       ) as restricted`,
     );
-    expect(result).toBeDefined();
+    expect(result[0].restricted).toBe(true);
   });
 });
 
@@ -1064,15 +1065,33 @@ describe("products privilege matrix", () => {
     expect(anon!.has_delete).toBe(false);
   });
 
-  it("authenticated has SELECT, INSERT, UPDATE, DELETE", () => {
+  it("authenticated has SELECT, INSERT, column-scoped UPDATE, DELETE", () => {
     const privileges = queryTablePrivileges("products");
     const auth = privileges.find(({ role_name }) => role_name === "authenticated");
+    const updateColumns = queryDisposableDatabase<{ column_name: string }>(
+      `select column_name
+       from information_schema.column_privileges
+       where table_schema = 'public'
+         and table_name = 'products'
+         and grantee = 'authenticated'
+         and privilege_type = 'UPDATE'
+       order by column_name`,
+    );
 
     expect(auth).toBeDefined();
     expect(auth!.has_select).toBe(true);
     expect(auth!.has_insert).toBe(true);
-    expect(auth!.has_update).toBe(true);
+    expect(auth!.has_update).toBe(false);
     expect(auth!.has_delete).toBe(true);
+    expect(updateColumns.map(({ column_name }) => column_name)).toEqual([
+      "description",
+      "is_published",
+      "name",
+      "price",
+      "slug",
+      "stock",
+      "weight_grams",
+    ]);
   });
 
   it("service_role has SELECT, INSERT, UPDATE, DELETE", () => {
