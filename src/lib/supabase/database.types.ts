@@ -58,6 +58,103 @@ export type Database = {
         }
         Relationships: []
       }
+      product_images: {
+        Row: {
+          bucket: string
+          byte_size: number
+          created_at: string
+          display_order: number
+          height: number | null
+          id: string
+          mime_type: string
+          object_path: string
+          product_id: string
+          width: number | null
+        }
+        Insert: {
+          bucket: string
+          byte_size: number
+          created_at?: string
+          display_order: number
+          height?: number | null
+          id?: string
+          mime_type: string
+          object_path: string
+          product_id: string
+          width?: number | null
+        }
+        Update: {
+          bucket?: string
+          byte_size?: number
+          created_at?: string
+          display_order?: number
+          height?: number | null
+          id?: string
+          mime_type?: string
+          object_path?: string
+          product_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_published: boolean
+          name: string
+          price: number
+          seller_id: string
+          slug: string
+          stock: number
+          updated_at: string
+          weight_grams: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_published?: boolean
+          name: string
+          price: number
+          seller_id: string
+          slug: string
+          stock: number
+          updated_at?: string
+          weight_grams: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_published?: boolean
+          name?: string
+          price?: number
+          seller_id?: string
+          slug?: string
+          stock?: number
+          updated_at?: string
+          weight_grams?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sellers: {
         Row: {
           auth_user_id: string
@@ -109,103 +206,6 @@ export type Database = {
         }
         Relationships: []
       }
-      products: {
-        Row: {
-          id: string
-          seller_id: string
-          slug: string
-          name: string
-          description: string
-          price: number
-          stock: number
-          weight_grams: number
-          is_published: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          seller_id: string
-          slug: string
-          name: string
-          description?: string
-          price: number
-          stock: number
-          weight_grams: number
-          is_published?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          seller_id?: string
-          slug?: string
-          name?: string
-          description?: string
-          price?: number
-          stock?: number
-          weight_grams?: number
-          is_published?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "products_seller_id_fkey"
-            columns: ["seller_id"]
-            isOneToOne: false
-            referencedRelation: "sellers"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      product_images: {
-        Row: {
-          id: string
-          product_id: string
-          bucket: string
-          object_path: string
-          mime_type: string
-          byte_size: number
-          width: number | null
-          height: number | null
-          display_order: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          product_id: string
-          bucket: string
-          object_path: string
-          mime_type: string
-          byte_size: number
-          width?: number | null
-          height?: number | null
-          display_order: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          product_id?: string
-          bucket?: string
-          object_path?: string
-          mime_type?: string
-          byte_size?: number
-          width?: number | null
-          height?: number | null
-          display_order?: number
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_images_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
     }
     Views: {
       [_ in never]: never
@@ -221,10 +221,6 @@ export type Database = {
       }
       delete_login_rate_limit_email_bucket: {
         Args: { p_email_digest: string }
-        Returns: Json
-      }
-      set_product_updated_at: {
-        Args: Record<PropertyKey, never>
         Returns: Json
       }
     }
@@ -362,4 +358,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
