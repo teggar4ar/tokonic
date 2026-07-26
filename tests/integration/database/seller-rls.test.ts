@@ -51,20 +51,30 @@ describe("seller RLS — anon isolation", () => {
     expect(data!.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("cannot read contact or origin columns", async () => {
+  it("can read the public WhatsApp contact column", async () => {
     const { data, error } = await anonClient
       .from("sellers")
       .select("id, whatsapp_phone");
 
-    expect(error).not.toBeNull();
-    expect(data).toBeNull();
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+    expect(data!.length).toBeGreaterThanOrEqual(1);
+  });
 
+  it("cannot read origin or identity columns", async () => {
     const { data: originData, error: originError } = await anonClient
       .from("sellers")
       .select("origin_address");
 
     expect(originError).not.toBeNull();
     expect(originData).toBeNull();
+
+    const { data: identityData, error: identityError } = await anonClient
+      .from("sellers")
+      .select("auth_user_id");
+
+    expect(identityError).not.toBeNull();
+    expect(identityData).toBeNull();
   });
 
   it("cannot insert a seller row", async () => {

@@ -2,7 +2,7 @@ import "server-only";
 
 import { requireAdmin } from "../../lib/auth/require-admin";
 import { createClient } from "../../lib/supabase/server";
-import type { ProductCreateInput } from "../../lib/validation/products";
+import { productSlugSchema, type ProductCreateInput } from "../../lib/validation/products";
 import { AppError } from "../errors/app-error";
 import { isConfirmedStorageNotFound } from "../storage/storage-absence";
 
@@ -105,6 +105,42 @@ export async function listPublishedProducts() {
       primaryImagePath: primaryImage ? primaryImage.object_path : null,
     };
   });
+}
+
+export async function getPublishedProductBySlug(slug: string) {
+  const parsedSlug = productSlugSchema.safeParse(slug);
+
+  if (!parsedSlug.success) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, slug, name, description, price, stock, product_images(object_path, display_order)")
+    .eq("slug", parsedSlug.data)
+    .eq("is_published", true)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError("INTERNAL_ERROR", "Detail produk tidak dapat dimuat.", { cause: error });
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    slug: data.slug,
+    name: data.name,
+    description: data.description,
+    priceRupiah: String(data.price),
+    stock: data.stock,
+    imagePaths: [...data.product_images]
+      .sort((a, b) => a.display_order - b.display_order)
+      .map((image) => image.object_path),
+  };
 }
 
 export async function listOwnedProducts() {

@@ -32,6 +32,25 @@ export async function getPublicStoreProfile() {
   };
 }
 
+export async function getPublicStoreContact() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("sellers")
+    .select("whatsapp_phone")
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError("INTERNAL_ERROR", "Kontak toko tidak dapat dimuat.", { cause: error });
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return { whatsappPhone: data.whatsapp_phone };
+}
+
 export async function getCurrentSeller() {
   const { sellerId } = await requireAdmin();
   const supabase = await createClient();
