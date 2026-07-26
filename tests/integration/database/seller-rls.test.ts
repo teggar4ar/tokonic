@@ -303,13 +303,21 @@ describe("seller table privilege matrix", () => {
   it("policies enforce auth.uid() ownership predicates", async () => {
     const policies = querySellerPolicies();
 
-    expect(policies.length).toBeGreaterThanOrEqual(2);
+    expect(policies.length).toBeGreaterThanOrEqual(3);
 
-    const selectPolicy = policies.find((p) => p.cmd === "r");
+    const ownerSelectPolicy = policies.find(
+      (p) => p.cmd === "r" && p.policyname === "Sellers can select their own row",
+    );
+    const anonSelectPolicy = policies.find(
+      (p) => p.cmd === "r" && p.policyname === "Anon can read the public store profile",
+    );
     const updatePolicy = policies.find((p) => p.cmd === "w");
 
-    expect(selectPolicy).toBeDefined();
-    expect(selectPolicy!.qual).toContain("auth.uid()");
+    expect(ownerSelectPolicy).toBeDefined();
+    expect(ownerSelectPolicy!.qual).toContain("auth.uid()");
+
+    expect(anonSelectPolicy).toBeDefined();
+    expect(anonSelectPolicy!.qual).toBe("true");
 
     expect(updatePolicy).toBeDefined();
     expect(updatePolicy!.qual).toContain("auth.uid()");
