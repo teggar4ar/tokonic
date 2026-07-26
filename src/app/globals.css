@@ -42,6 +42,10 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-focus: var(--focus-ring);
   --color-focus-foreground: var(--focus-foreground);
+  --text-page-title: 1.75rem;
+  --text-page-title--line-height: 1.2;
+  --leading-heading: 1.2;
+  --tracking-eyebrow: 0.14em;
 }
 
 :root {

@@ -27,7 +27,7 @@ export function AdminShell({ storeName, children }: AdminShellProps) {
       <div className="bg-primary text-primary-foreground lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:gap-6 lg:overflow-y-auto lg:px-4 lg:py-6">
         <div className="flex items-center justify-between gap-4 px-4 py-3 lg:block lg:p-0">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-foreground/60">Tokonic Admin</p>
+            <p className="text-xs font-semibold uppercase tracking-eyebrow text-primary-foreground/60">Tokonic Admin</p>
             <p className="truncate text-base font-bold">{storeName}</p>
           </div>
           <div className="lg:hidden">

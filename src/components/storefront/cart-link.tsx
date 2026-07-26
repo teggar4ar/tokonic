@@ -19,7 +19,7 @@ export function CartLink() {
       {isHydrated && itemCount > 0 && (
         <span
           aria-hidden="true"
-          className="absolute -right-0.5 -top-0.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-xs font-semibold tabular-nums text-white"
+          className="absolute -right-0.5 -top-0.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-xs font-semibold tabular-nums text-accent-foreground"
         >
           {itemCount > 99 ? "99+" : itemCount}
         </span>

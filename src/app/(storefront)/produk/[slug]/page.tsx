@@ -56,7 +56,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
         <ProductGallery productName={product.name} imagePaths={product.imagePaths} />
         <div className="grid content-start gap-6">
           <header>
-            <h1 className="text-[28px] font-bold leading-tight tracking-tight text-foreground sm:text-4xl">
+            <h1 className="text-page-title font-bold tracking-tight text-foreground sm:text-4xl">
               {product.name}
             </h1>
             <ProductPrice priceRupiah={product.priceRupiah} className="mt-3 block text-2xl" />

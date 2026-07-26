@@ -9,7 +9,7 @@ export default function ProductNotFound() {
       </p>
       <Link
         href="/"
-        className="mt-6 inline-flex h-control items-center rounded-lg bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        className="mt-6 inline-flex h-control items-center rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       >
         Kembali ke katalog
       </Link>

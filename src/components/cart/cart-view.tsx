@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { loadCartProducts } from "@/app/(storefront)/keranjang/actions";
 import { CartItemRow } from "@/components/cart/cart-item-row";
 import { CartSummary } from "@/components/cart/cart-summary";
+import { Button } from "@/components/ui/button";
 import { useCart } from "@/contexts/cart-context";
 import { calculateSubtotal } from "@/lib/money";
 import type { HydratedCartProduct } from "@/types/cart";
@@ -13,6 +14,8 @@ export function CartView() {
   const { state, isHydrated } = useCart();
   const [products, setProducts] = useState<HydratedCartProduct[]>([]);
   const [loadedProductIdsKey, setLoadedProductIdsKey] = useState("");
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const productIds = state.items.map((item) => item.productId);
   const productIdsKey = productIds.join(",");
 
@@ -28,19 +31,19 @@ export function CartView() {
         if (!cancelled) {
           setProducts(currentProducts);
           setLoadedProductIdsKey(productIdsKey);
+          setLoadFailed(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setProducts([]);
-          setLoadedProductIdsKey(productIdsKey);
+          setLoadFailed(true);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isHydrated, productIdsKey]);
+  }, [isHydrated, productIdsKey, loadAttempt]);
 
   const productsById = new Map(products.map((product) => [product.id, product]));
   const hydratedItems = state.items.flatMap((item) => {
@@ -54,8 +57,32 @@ export function CartView() {
     })),
   );
 
+  if (loadFailed) {
+    return (
+      <div role="alert" className="py-12">
+        <h2 className="text-xl font-semibold text-foreground">Keranjang belum berhasil dimuat</h2>
+        <p className="mt-2 max-w-xl leading-7 text-muted-foreground">
+          Terjadi gangguan saat memuat data produk. Coba lagi.
+        </p>
+        <Button
+          className="mt-6"
+          onClick={() => {
+            setLoadFailed(false);
+            setLoadAttempt((attempt) => attempt + 1);
+          }}
+        >
+          Coba lagi
+        </Button>
+      </div>
+    );
+  }
+
   if (!isHydrated || (productIds.length > 0 && loadedProductIdsKey !== productIdsKey)) {
-    return <p className="py-12 text-muted-foreground">Memuat keranjang...</p>;
+    return (
+      <p role="status" className="py-12 text-muted-foreground">
+        Memuat keranjang...
+      </p>
+    );
   }
 
   if (state.items.length === 0) {
