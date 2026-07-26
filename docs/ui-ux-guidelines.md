@@ -9,6 +9,9 @@ Use this before designing or implementing any screen. `AGENTS.md`, the TDD, and 
 - The lock icon uses an icon-in-tinted-square treatment. This is acceptable as one auth cue, but the pattern must not be repeated on every card, feature, or empty state.
 - The admin page is a placeholder, not an established dashboard shell. Its `max-w-5xl`, header, and bordered section must not be copied into every admin screen.
 - Loading, empty, error, navigation shell, responsive data, and form-submission states are not yet implemented.
+- The completed settings route is not discoverable through admin navigation, repeats the provisional route-local header/constrained-column composition, and exposes logo bucket/path infrastructure fields as ordinary operator inputs. Keep `TASK-015` complete, but address this through the approved `TASK-015A` remediation before treating the admin UI as an established pattern.
+- The product image manager created during `TASK-018` is lifecycle infrastructure, not finished product-management UI: it lacks image-led previews/order context, uses equal-weight file-input rows, gives deletion primary-action styling, does not distinguish success/warning/error visually, and risks narrow-screen overflow. Do not place it into `TASK-019` screens unchanged.
+- Token adoption remains incomplete in existing screens: arbitrary typography/tracking, raw page gutters/spacing, inconsistent page-title roles, and a 36px shared small-button variant can bypass the documented rhythm and touch-target rules.
 - The current `Button`, `Input`, `Label`, and `Card` primitives are valid shadcn-compatible foundations, but input/button heights must reach at least 44px on buyer-facing mobile forms.
 
 ## Design Point of View
@@ -23,16 +26,46 @@ Tokonic uses **trustworthy Swiss-modern commerce**: structured grid, restrained 
 
 ## Explicitly Forbidden: “AI-Generated” Tells
 
-- No default indigo-to-purple gradient heroes unless a documented campaign/brand need requires one.
-- No generic centered `rounded-2xl shadow-lg` white card as the default container for every page or section.
+Anti-AI-Slop is a structural quality rule, not a request to add more decoration. A screen must look derived from Tokonic's commerce job, content priority, and operational context—not from a reusable AI page recipe with the colors swapped.
+
+Tokonic's distinct signature is **product imagery as warmth, navy/slate as trust, blue reserved for action, crisp grid alignment, direct Bahasa Indonesia, and density that changes with the job**. Storefront compositions lead with products, price, availability, and purchase confidence. Admin compositions lead with queues, status, exceptions, and the next operational action. Do not introduce a competing green/vibrant startup palette, playful block system, second font pairing, or page-local visual theme; accessibility and interaction guidance may strengthen this system but must not replace it.
+
+- No default indigo-to-purple gradient heroes unless a documented campaign/brand need requires one. Also reject mesh gradients, blurred aurora bands, glowing orbs, and gradient text used merely to make an otherwise generic heading feel designed.
+- No generic centered `rounded-2xl shadow-lg` white card as the default container for every page or section. Auth, empty, legal, checkout, and admin screens must not all collapse into the same centered-card silhouette.
+- No default page rhythm such as centered hero → three equal cards → metrics strip → oversized CTA banner. Section order and emphasis must follow the screen's actual buyer or operator job.
 - No emoji as navigation, status, feature, or action icons. Use Heroicons consistently.
-- No repeated icon-in-circle/tinted-square feature-card grid. Use icons only when they improve scanning or meaning.
-- No random stock illustrations, floating blobs, glass panels, neon glow, or 3D assets without one coherent art direction.
-- No wall of equal-weight cards. Establish primary, secondary, and supporting information.
-- No arbitrary Tailwind spacing/type choices per screen. Use the rhythm and roles below.
-- No excessive rounded containers. Group with spacing/dividers first; use surfaces only when a boundary is meaningful.
-- No decorative buttons, fake tabs, meaningless metrics, or filler copy.
-- No mixed icon families/styles at the same hierarchy level.
+- No repeated icon-in-circle/tinted-square feature-card grid. Use icons only when they improve scanning or meaning; never use an icon badge as automatic decoration above every heading.
+- No random stock illustrations, floating blobs, glass panels, neon glow, fake browser/device chrome, or 3D assets without one coherent and necessary art direction.
+- No wall of equal-weight cards, KPI tiles, or bordered boxes. Establish primary, secondary, and supporting information; use alignment, spacing, dividers, and type before adding a surface.
+- No uniform spacing that makes unrelated screens share the same rhythm. Use the token scale consistently, but vary density intentionally: compact operational admin rows, comfortable forms, and generous product-led storefront sections.
+- No arbitrary Tailwind spacing/type choices per screen. Use the rhythm and roles below; if a genuinely reusable role is missing, add a semantic token or component variant rather than improvising repeatedly.
+- No excessive rounded containers or pills. Group with spacing/dividers first; use surfaces only when a boundary is meaningful, and reserve pills for short statuses or compact controls whose shape conveys their role.
+- No decorative buttons, fake tabs, meaningless metrics, invented social proof, placeholder testimonials, or filler copy. Every control must perform the action its styling implies.
+- No mixed icon families/styles at the same hierarchy level, inconsistent stroke weights, or icon-only actions without accessible names.
+- No italic display headings, gradient-emphasis words, gratuitous all-caps prose, or oversized type unsupported by the content hierarchy. Carry emphasis through scale, weight, alignment, or restrained accent color.
+- No decorative motion. Animate only state, continuity, or feedback using shared timing tokens; support reduced motion and avoid layout-shifting animation.
+- No fabricated product photography or metrics presented as real. Use supplied assets, truthful data, or clearly marked placeholders.
+
+### Before / After Decision Rules
+
+| Generic default — reject | Tokonic-specific direction — use |
+|---|---|
+| Centered gradient hero with abstract blobs and a broad “grow your business” CTA | Product-led storefront opening with real store identity, useful category/catalog context, current products, and one concrete shopping action |
+| Three identical feature cards, each with a tinted icon badge | A content hierarchy shaped by the job: product imagery and price for buyers; queue, status, exception, and next action for admin |
+| Every admin datum inside a large rounded metric card | Compact aligned summaries; emphasize only decision-driving totals and present the rest as grouped text, rows, or a data grid |
+| Checkout rendered as one floating card with every field at equal weight | Clearly grouped fulfillment, destination/rate, and order-summary regions with progressive disclosure and a persistent understanding of total and next step |
+| Empty state dominated by an oversized icon circle and generic “No data” copy | Concise domain explanation, recovery or creation action, and enough surrounding page structure to preserve orientation |
+| Same `py-16`, centered heading, muted paragraph, and card grid on every route | Token-based spacing with deliberate density and asymmetry determined by content priority, while retaining consistent gutters and alignment |
+| Raw infrastructure fields exposed because they already exist in the data model | Operator-facing concepts and controls; hide storage/provider implementation details behind appropriate workflows |
+
+### Structural Variety Without Visual Drift
+
+- Consistency means shared tokens, typography roles, icon language, interaction behavior, and component contracts—not identical page silhouettes.
+- Before composing a page, name its dominant job and dominant content object. If neither changes the hierarchy, the composition is probably generic.
+- Repeated domain patterns belong in shared components, but a reusable component must not force every route into one card/frame composition.
+- Use one surface system per screen. Do not mix Card and Frame walls or add wrappers merely to make content appear “finished.”
+- Storefront and admin may share foundations while retaining their tonal split: storefront is image-led and reassuring; admin is denser and operational. Do not make one imitate the other.
+- At review, compare adjacent routes. If removing headings makes them visually indistinguishable, revise their information hierarchy before adding decoration.
 
 ## Design Tokens
 
@@ -263,8 +296,8 @@ Use Bahasa Indonesia that is plain, direct, calm, and specific. Avoid corporate 
 
 ## UI Review Gate
 
-- [ ] Screen has a deliberate hierarchy and one primary action; it does not resemble a generic template.
-- [ ] No forbidden AI-generated tell is present.
+- [ ] Screen names and visibly prioritizes its dominant user job and content object; it does not resemble a generic template or an adjacent route with only the heading changed.
+- [ ] No forbidden AI-generated tell is present, including generic page rhythm, repeated equal-weight surfaces, decorative icon badges, invented content, token improvisation, or unnecessary visual effects.
 - [ ] Semantic tokens, type roles, spacing rhythm, radius, and elevation rules are followed.
 - [ ] Repeated patterns are extracted at 2+ uses; variants replace near-duplicate components.
 - [ ] ReUI API/example was checked before implementing an available component.

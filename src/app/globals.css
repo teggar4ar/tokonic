@@ -30,6 +30,22 @@
   --radius-md: var(--radius-control);
   --radius-lg: var(--radius-card);
   --radius-xl: var(--radius-modal);
+  --color-invert-foreground: var(--invert-foreground);
+  --color-invert: var(--invert);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info-foreground: var(--info-foreground);
+  --color-success-foreground: var(--success-foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-focus: var(--focus-ring);
+  --color-focus-foreground: var(--focus-foreground);
+  --text-page-title: 1.75rem;
+  --text-page-title--line-height: 1.2;
+  --leading-heading: 1.2;
+  --tracking-eyebrow: 0.14em;
 }
 
 :root {
@@ -65,6 +81,17 @@
   --radius-control: 0.5rem;
   --radius-card: 0.75rem;
   --radius-modal: 1rem;
+  --destructive-foreground: #991b1b;
+  --success-foreground: #14532d;
+  --info-foreground: #075985;
+  --warning-foreground: #92400e;
+  --invert: #0f172a;
+  --invert-foreground: #f8fafc;
+  --popover: #ffffff;
+  --popover-foreground: #020617;
+  --secondary: #e8ecf1;
+  --secondary-foreground: #0f172a;
+  --focus-foreground: #ffffff;
 }
 
 @media (min-width: 40rem) {

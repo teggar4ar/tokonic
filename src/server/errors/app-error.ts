@@ -4,6 +4,7 @@ export type AppErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "ORPHAN_CLEANUP_REQUIRED"
   | "INTERNAL_ERROR";
 
 export class AppError extends Error {
