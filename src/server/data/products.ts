@@ -93,7 +93,7 @@ async function setOwnedProductPublication(productId: string, isPublished: boolea
 
   if (error) {
     throw new AppError(
-      error.code === "P0002" ? "NOT_FOUND" : error.code === "40001" ? "CONFLICT" : "INTERNAL_ERROR",
+      error.code === "P0002" ? "NOT_FOUND" : error.code === "55000" ? "CONFLICT" : "INTERNAL_ERROR",
       "Status publikasi produk tidak dapat diubah.",
       { cause: error },
     );

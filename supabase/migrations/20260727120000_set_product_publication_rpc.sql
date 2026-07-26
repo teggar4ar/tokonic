@@ -37,8 +37,11 @@ begin
     raise exception 'product not found' using errcode = 'P0002';
   end if;
 
+  -- 55000 (object_not_in_prerequisite_state) is deliberate: 40001 is the
+  -- reserved serialization_failure code and PostgREST retries transactions
+  -- that raise it, which turns this guard into an infinite retry loop.
   if v_product.deletion_started_at is not null then
-    raise exception 'product deletion in progress' using errcode = '40001';
+    raise exception 'product deletion in progress' using errcode = '55000';
   end if;
 
   update public.products
