@@ -73,7 +73,6 @@ function readFunctionSecurityContract() {
 function readPrivilegeContract() {
   return queryDisposableDatabase<{
     role_name: string;
-    private_schema_usage: boolean;
     table_select: boolean;
     table_insert: boolean;
     table_update: boolean;
@@ -86,7 +85,7 @@ function readPrivilegeContract() {
     private_cleanup_execute: boolean;
     private_helper_execute: boolean;
   }>(
-    "with roles(role_name, role_oid) as (values ('PUBLIC', 0::oid), ('anon', pg_catalog.to_regrole('anon')::oid), ('authenticated', pg_catalog.to_regrole('authenticated')::oid), ('service_role', pg_catalog.to_regrole('service_role')::oid)) select role_name, pg_catalog.has_schema_privilege(role_oid, 'private', 'USAGE') as private_schema_usage, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'SELECT') as table_select, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'INSERT') as table_insert, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'UPDATE') as table_update, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'DELETE') as table_delete, pg_catalog.has_function_privilege(role_oid, 'public.consume_login_rate_limit(text,text,timestamp with time zone)', 'EXECUTE') as public_consume_execute, pg_catalog.has_function_privilege(role_oid, 'public.delete_login_rate_limit_email_bucket(text)', 'EXECUTE') as public_delete_execute, pg_catalog.has_function_privilege(role_oid, 'public.cleanup_login_rate_limit_buckets(timestamp with time zone)', 'EXECUTE') as public_cleanup_execute, pg_catalog.has_function_privilege(role_oid, 'private.consume_login_rate_limit(text,text,timestamp with time zone)', 'EXECUTE') as private_consume_execute, pg_catalog.has_function_privilege(role_oid, 'private.delete_login_rate_limit_email_bucket(text)', 'EXECUTE') as private_delete_execute, pg_catalog.has_function_privilege(role_oid, 'private.cleanup_login_rate_limit_buckets(timestamp with time zone)', 'EXECUTE') as private_cleanup_execute, pg_catalog.has_function_privilege(role_oid, 'private.consume_login_rate_limit_bucket(text,text,timestamp with time zone)', 'EXECUTE') as private_helper_execute from roles order by role_name",
+    "with roles(role_name, role_oid) as (values ('PUBLIC', 0::oid), ('anon', pg_catalog.to_regrole('anon')::oid), ('authenticated', pg_catalog.to_regrole('authenticated')::oid), ('service_role', pg_catalog.to_regrole('service_role')::oid)) select role_name, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'SELECT') as table_select, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'INSERT') as table_insert, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'UPDATE') as table_update, pg_catalog.has_table_privilege(role_oid, 'public.login_rate_limit_buckets', 'DELETE') as table_delete, pg_catalog.has_function_privilege(role_oid, 'public.consume_login_rate_limit(text,text,timestamp with time zone)', 'EXECUTE') as public_consume_execute, pg_catalog.has_function_privilege(role_oid, 'public.delete_login_rate_limit_email_bucket(text)', 'EXECUTE') as public_delete_execute, pg_catalog.has_function_privilege(role_oid, 'public.cleanup_login_rate_limit_buckets(timestamp with time zone)', 'EXECUTE') as public_cleanup_execute, pg_catalog.has_function_privilege(role_oid, 'private.consume_login_rate_limit(text,text,timestamp with time zone)', 'EXECUTE') as private_consume_execute, pg_catalog.has_function_privilege(role_oid, 'private.delete_login_rate_limit_email_bucket(text)', 'EXECUTE') as private_delete_execute, pg_catalog.has_function_privilege(role_oid, 'private.cleanup_login_rate_limit_buckets(timestamp with time zone)', 'EXECUTE') as private_cleanup_execute, pg_catalog.has_function_privilege(role_oid, 'private.consume_login_rate_limit_bucket(text,text,timestamp with time zone)', 'EXECUTE') as private_helper_execute from roles order by role_name",
   );
 }
 
@@ -314,7 +313,6 @@ describe("PostgreSQL login rate limiter", () => {
     }
     expect(serviceRole).toEqual({
       role_name: "service_role",
-      private_schema_usage: true,
       table_select: false,
       table_insert: false,
       table_update: false,

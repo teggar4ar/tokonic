@@ -812,26 +812,12 @@ describe("product RLS — owner access", () => {
       .eq("id", publishedProductId);
   });
 
-  it("can delete own product", async () => {
-    // Create a temporary product to delete
-    const { data: temp } = await products(ownerClient)
-      .insert({
-        seller_id: ownerSellerId,
-        slug: "delete-me",
-        name: "Delete Me",
-        price: 1000,
-        stock: 0,
-        weight_grams: 100,
-      })
-      .select("id")
-      .single();
-    expect(temp).not.toBeNull();
-
+  it("cannot bypass the lifecycle by directly deleting an owned product", async () => {
     const { error } = await products(ownerClient)
       .delete()
-      .eq("id", temp!.id);
+      .eq("id", unpublishedProductId);
 
-    expect(error).toBeNull();
+    expect(error).not.toBeNull();
   });
 
   it("can read own product images", async () => {
@@ -843,26 +829,19 @@ describe("product RLS — owner access", () => {
     expect(data!.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("can insert own product images", async () => {
-    const { data, error } = await productImages(ownerClient)
-      .insert({
-        product_id: publishedProductId,
-        bucket: "product-images",
-        object_path: `products/${publishedProductId}/owner-img.jpg`,
-        mime_type: "image/png",
-        byte_size: 204800,
-        width: 1024,
-        height: 768,
-        display_order: 2,
-      })
-      .select("id")
-      .single();
+  it("cannot bypass lifecycle verification by directly inserting owned product images", async () => {
+    const { error } = await productImages(ownerClient).insert({
+      product_id: publishedProductId,
+      bucket: "product-images",
+      object_path: `products/${publishedProductId}/${crypto.randomUUID()}.png`,
+      mime_type: "image/png",
+      byte_size: 204800,
+      width: 1024,
+      height: 768,
+      display_order: 2,
+    });
 
-    expect(error).toBeNull();
-    expect(data).not.toBeNull();
-
-    // Clean up
-    await productImages(serviceRoleClient).delete().eq("id", data!.id);
+    expect(error).not.toBeNull();
   });
 
   it("can update own product image display_order", async () => {
@@ -888,13 +867,12 @@ describe("product RLS — owner access", () => {
       .eq("id", imgId);
   });
 
-  it("can delete own product images", async () => {
-    // Create a temporary image to delete
-    const { data: temp } = await productImages(ownerClient)
+  it("can delete an owned image fixture created through trusted setup", async () => {
+    const { data: temp } = await productImages(serviceRoleClient)
       .insert({
         product_id: publishedProductId,
         bucket: "product-images",
-        object_path: `products/${publishedProductId}/delete-me.jpg`,
+        object_path: `products/${publishedProductId}/${crypto.randomUUID()}.webp`,
         mime_type: "image/webp",
         byte_size: 1024,
         display_order: 4,
@@ -1067,7 +1045,7 @@ describe("products privilege matrix", () => {
     expect(anon!.has_delete).toBe(false);
   });
 
-  it("authenticated has SELECT, INSERT, column-scoped UPDATE, DELETE", () => {
+  it("authenticated uses lifecycle functions for DELETE and retains only safe direct product privileges", () => {
     const privileges = queryTablePrivileges("products");
     const auth = privileges.find(({ role_name }) => role_name === "authenticated");
     const updateColumns = queryDisposableDatabase<{ column_name: string }>(
@@ -1084,10 +1062,9 @@ describe("products privilege matrix", () => {
     expect(auth!.has_select).toBe(true);
     expect(auth!.has_insert).toBe(true);
     expect(auth!.has_update).toBe(false);
-    expect(auth!.has_delete).toBe(true);
+    expect(auth!.has_delete).toBe(false);
     expect(updateColumns.map(({ column_name }) => column_name)).toEqual([
       "description",
-      "is_published",
       "name",
       "price",
       "slug",
@@ -1143,13 +1120,13 @@ describe("product_images privilege matrix", () => {
     expect(anon!.has_delete).toBe(false);
   });
 
-  it("authenticated has SELECT, INSERT, UPDATE, DELETE", () => {
+  it("authenticated uses lifecycle registration instead of direct product image INSERT", () => {
     const privileges = queryTablePrivileges("product_images");
     const auth = privileges.find(({ role_name }) => role_name === "authenticated");
 
     expect(auth).toBeDefined();
     expect(auth!.has_select).toBe(true);
-    expect(auth!.has_insert).toBe(true);
+    expect(auth!.has_insert).toBe(false);
     expect(auth!.has_update).toBe(true);
     expect(auth!.has_delete).toBe(true);
   });
@@ -1204,14 +1181,14 @@ describe("products column-level update grants", () => {
     return result[0]?.has_privilege ?? false;
   }
 
-  it("authenticated can update mutable fields", () => {
+  it("authenticated can update non-publication mutable fields only", () => {
     expect(queryColumnUpdatePrivilege("authenticated", "name")).toBe(true);
     expect(queryColumnUpdatePrivilege("authenticated", "slug")).toBe(true);
     expect(queryColumnUpdatePrivilege("authenticated", "description")).toBe(true);
     expect(queryColumnUpdatePrivilege("authenticated", "price")).toBe(true);
     expect(queryColumnUpdatePrivilege("authenticated", "stock")).toBe(true);
     expect(queryColumnUpdatePrivilege("authenticated", "weight_grams")).toBe(true);
-    expect(queryColumnUpdatePrivilege("authenticated", "is_published")).toBe(true);
+    expect(queryColumnUpdatePrivilege("authenticated", "is_published")).toBe(false);
   });
 
   it("authenticated cannot update immutable fields", () => {

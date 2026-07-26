@@ -34,7 +34,7 @@ async function createProduct(label: string) {
   const { error } = await serviceRole.from("products").insert({
     id,
     seller_id: sellerId,
-    slug: `${label}-${id}`,
+    slug: `lifecycle-${id}`,
     name: label,
     price: 1_000,
     stock: 1,
