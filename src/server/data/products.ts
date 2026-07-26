@@ -79,6 +79,34 @@ export async function getPublishedProductsForCart(productIds: string[]) {
   }));
 }
 
+export async function listPublishedProducts() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, slug, name, price, stock, product_images(object_path, display_order)")
+    .eq("is_published", true)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    throw new AppError("INTERNAL_ERROR", "Katalog produk tidak dapat dimuat.", { cause: error });
+  }
+
+  return data.map((product) => {
+    const primaryImage = [...product.product_images].sort(
+      (a, b) => a.display_order - b.display_order,
+    )[0];
+
+    return {
+      id: product.id,
+      slug: product.slug,
+      name: product.name,
+      priceRupiah: String(product.price),
+      stock: product.stock,
+      primaryImagePath: primaryImage ? primaryImage.object_path : null,
+    };
+  });
+}
+
 export async function listOwnedProducts() {
   const { sellerId } = await requireAdmin();
   const supabase = await createClient();

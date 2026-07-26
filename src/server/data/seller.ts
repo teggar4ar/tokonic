@@ -8,6 +8,30 @@ import { AppError } from "../errors/app-error";
 const settingsColumns =
   "id, store_name, store_slug, logo_bucket, logo_path, whatsapp_phone, origin_label, origin_address, origin_rajaongkir_id, origin_rajaongkir_level, business_timezone";
 
+export async function getPublicStoreProfile() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("sellers")
+    .select("store_name, store_slug, logo_bucket, logo_path")
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError("INTERNAL_ERROR", "Profil toko tidak dapat dimuat.", { cause: error });
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    storeName: data.store_name,
+    storeSlug: data.store_slug,
+    logoBucket: data.logo_bucket,
+    logoPath: data.logo_path,
+  };
+}
+
 export async function getCurrentSeller() {
   const { sellerId } = await requireAdmin();
   const supabase = await createClient();
