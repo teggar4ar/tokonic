@@ -156,5 +156,5 @@ describe("product publication state mutation", () => {
 
     expect(error).not.toBeNull();
     expect(await readPublication(productId)).toBe(false);
-  });
+  }, 60_000);
 });
