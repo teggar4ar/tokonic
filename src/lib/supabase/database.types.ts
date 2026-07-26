@@ -256,6 +256,7 @@ export type Database = {
         Args: { p_email_digest: string }
         Returns: Json
       }
+      delete_product_image: { Args: { p_image_id: string }; Returns: Json }
       finalize_product_deletion: {
         Args: { p_cleaned_object_paths: string[]; p_product_id: string }
         Returns: Json
