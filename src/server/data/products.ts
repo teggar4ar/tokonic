@@ -4,6 +4,7 @@ import { requireAdmin } from "../../lib/auth/require-admin";
 import { createClient } from "../../lib/supabase/server";
 import type { ProductCreateInput } from "../../lib/validation/products";
 import { AppError } from "../errors/app-error";
+import { isConfirmedStorageNotFound } from "../storage/storage-absence";
 
 const productColumns = "id, seller_id, slug, name, description, price, stock, weight_grams, is_published";
 
@@ -156,11 +157,23 @@ export async function removeOwnedProductImageObjects(sellerId: string, bucket: s
   const supabase = await createClient();
   const { data, error } = await supabase.storage.from(bucket).remove(paths);
   if (error) {
-    const status = "statusCode" in error ? String(error.statusCode) : "";
-    if (status === "404" || error.name === "NotFound") return { removed: [], notFound: paths };
-    throw new AppError("INTERNAL_ERROR", "Objek gambar tidak dapat dihapus.", { cause: error });
+    const confirmedAbsent: string[] = [];
+    for (const path of paths) {
+      const result = await supabase.storage.from(bucket).download(path);
+      if (!result.error || !isConfirmedStorageNotFound(result.error)) {
+        throw new AppError("INTERNAL_ERROR", "Objek gambar tidak dapat dihapus.", { cause: error });
+      }
+      confirmedAbsent.push(path);
+    }
+    return { removed: [], notFound: confirmedAbsent };
   }
   const removed = data.map((object) => object.name).filter((path) => paths.includes(path));
+  const unresolved: string[] = [];
+  for (const path of paths.filter((path) => !removed.includes(path))) {
+    const result = await supabase.storage.from(bucket).download(path);
+    if (!result.error || !isConfirmedStorageNotFound(result.error)) unresolved.push(path);
+  }
+  if (unresolved.length > 0) throw new AppError("INTERNAL_ERROR", "Penghapusan gambar produk belum lengkap.");
   return { removed, notFound: paths.filter((path) => !removed.includes(path)) };
 }
 

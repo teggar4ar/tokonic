@@ -63,6 +63,15 @@ describe("product hard-delete Storage lifecycle", () => {
     expect(deps.hardDeleteOwned).not.toHaveBeenCalled();
   });
 
+  it("preserves the database product when a batch 404 has not been individually confirmed", async () => {
+    const batchNotFound = Object.assign(new Error("batch not found"), { name: "StorageUnknownError", statusCode: 404 });
+    const deps = dependencies({ removeImageObjects: vi.fn().mockRejectedValue(batchNotFound) });
+    const service = createProductService(deps);
+
+    await expect(service.hardDelete(productId)).rejects.toMatchObject({ code: "INTERNAL_ERROR" });
+    expect(deps.hardDeleteOwned).not.toHaveBeenCalled();
+  });
+
   it("preserves the database product on non-not-found Storage failure", async () => {
     const deps = dependencies({ removeImageObjects: vi.fn().mockRejectedValue(new Error("storage unavailable")) });
     const service = createProductService(deps);

@@ -1,11 +1,12 @@
 import "server-only";
 
-import { validateDecodedProductImage } from "../../lib/image";
 import { requireAdmin } from "../../lib/auth/require-admin";
 import { createClient } from "../../lib/supabase/server";
 import type { ProductImageMetadataInput } from "../../lib/validation/product-images";
 import { productImageBucket } from "../../lib/validation/product-images";
 import { AppError } from "../errors/app-error";
+import { inspectStoredImage } from "../images/stored-image-inspector";
+import { isConfirmedStorageNotFound } from "../storage/storage-absence";
 
 async function authorizedClient(sellerId: string) {
   const admin = await requireAdmin();
@@ -15,27 +16,6 @@ async function authorizedClient(sellerId: string) {
 
 function extensionOf(path: string) {
   return path.split(".").pop() ?? "";
-}
-
-function dimensions(bytes: Uint8Array, mimeType: string) {
-  if (mimeType === "image/png" && bytes.length >= 24) {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    return { width: view.getUint32(16), height: view.getUint32(20) };
-  }
-  if (mimeType === "image/jpeg") {
-    for (let offset = 2; offset + 9 < bytes.length;) {
-      if (bytes[offset] !== 0xff) break;
-      const marker = bytes[offset + 1];
-      const length = (bytes[offset + 2] << 8) + bytes[offset + 3];
-      if (marker >= 0xc0 && marker <= 0xc3) return { height: (bytes[offset + 5] << 8) + bytes[offset + 6], width: (bytes[offset + 7] << 8) + bytes[offset + 8] };
-      offset += 2 + length;
-    }
-  }
-  if (mimeType === "image/webp" && bytes.length >= 30) {
-    const kind = new TextDecoder().decode(bytes.slice(12, 16));
-    if (kind === "VP8X") return { width: 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16), height: 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16) };
-  }
-  throw new AppError("VALIDATION_ERROR", "Dimensi gambar tidak dapat diverifikasi.");
 }
 
 export async function assertOwnedProduct(sellerId: string, productId: string) {
@@ -64,12 +44,19 @@ export async function verifyOwnedStorageObject(sellerId: string, bucket: string,
   const supabase = await authorizedClient(sellerId);
   if (bucket !== productImageBucket) throw new AppError("VALIDATION_ERROR", "Bucket gambar tidak valid.");
   const { data, error } = await supabase.storage.from(bucket).download(objectPath);
-  if (error || !data) return { exists: false };
+  if (error) {
+    if (isConfirmedStorageNotFound(error)) return { exists: false, candidateIdentified: false };
+    throw new AppError("INTERNAL_ERROR", "Objek gambar tidak dapat diverifikasi.", { cause: error });
+  }
+  if (!data) throw new AppError("INTERNAL_ERROR", "Objek gambar tidak dapat diverifikasi.");
   const bytes = new Uint8Array(await data.arrayBuffer());
   const declaredMimeType = data.type;
-  const validated = validateDecodedProductImage({ bytes, declaredMimeType, extension: extensionOf(objectPath), decoded: true });
-  const decoded = dimensions(bytes, validated.mimeType);
-  return { exists: true, contentType: declaredMimeType, byteSize: bytes.byteLength, actualMimeType: validated.mimeType, ...decoded };
+  try {
+    const inspected = await inspectStoredImage({ bytes, storageContentType: declaredMimeType, extension: extensionOf(objectPath) });
+    return { exists: true, candidateIdentified: true, contentType: declaredMimeType, actualMimeType: inspected.mimeType, byteSize: inspected.byteSize, width: inspected.width, height: inspected.height };
+  } catch (error) {
+    throw new AppError("VALIDATION_ERROR", "Objek gambar tidak valid.", { cause: { candidateIdentified: true, error } });
+  }
 }
 
 export async function insertProductImageMetadata(sellerId: string, input: ProductImageMetadataInput) {
@@ -101,9 +88,9 @@ export async function updateProductImageMetadata(sellerId: string, imageId: stri
 
 export async function deleteProductImageMetadata(sellerId: string, imageId: string) {
   const supabase = await authorizedClient(sellerId);
-  const { data, error } = await supabase.from("product_images").delete().eq("id", imageId).select("id").maybeSingle();
-  if (error) throw new AppError("INTERNAL_ERROR", "Metadata gambar tidak dapat dihapus.", { cause: error });
-  if (!data) throw new AppError("NOT_FOUND", "Gambar tidak ditemukan.");
+  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string } | null }>;
+  const { data, error } = await rpc("delete_product_image", { p_image_id: imageId });
+  if (error || !data) throw new AppError(error?.code === "P0002" ? "NOT_FOUND" : error?.code === "40001" ? "CONFLICT" : "INTERNAL_ERROR", "Metadata gambar tidak dapat dihapus.", { cause: error });
 }
 
 export async function removeOwnedStorageObjects(sellerId: string, bucket: string, paths: string[]) {
@@ -116,7 +103,7 @@ export async function removeOwnedStorageObjects(sellerId: string, bucket: string
   const unresolved: string[] = [];
   for (const path of paths.filter((path) => !removed.includes(path))) {
     const result = await supabase.storage.from(bucket).download(path);
-    if (!result.error) unresolved.push(path);
+    if (!result.error || !isConfirmedStorageNotFound(result.error)) unresolved.push(path);
   }
   if (unresolved.length > 0) throw new AppError("INTERNAL_ERROR", "Penghapusan objek gambar belum lengkap.");
   return { removed, notFound: paths.filter((path) => !removed.includes(path)) };

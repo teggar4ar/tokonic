@@ -42,6 +42,10 @@ function assertPathProduct(path: string, productId: string) {
   if (!path.startsWith(`products/${productId}/`)) throw new AppError("VALIDATION_ERROR", "Path gambar tidak valid.");
 }
 
+function identifiedCandidateError(error: unknown) {
+  return error instanceof Error && typeof error.cause === "object" && error.cause !== null && "candidateIdentified" in error.cause && error.cause.candidateIdentified === true;
+}
+
 function assertVerifiedObject(object: { exists: boolean; contentType?: string; byteSize?: number; actualMimeType?: string; width?: number; height?: number }, input: { mimeType: string; byteSize: number; width: number; height: number }) {
   if (!object.exists || object.contentType !== input.mimeType || object.actualMimeType !== input.mimeType || object.byteSize !== input.byteSize || object.width !== input.width || object.height !== input.height || input.byteSize > productImageMaximumBytes) throw new AppError("VALIDATION_ERROR", "Objek gambar tidak valid.");
 }
@@ -62,8 +66,12 @@ export function createProductImageService(dependencies: ProductImageServiceDepen
         assertVerifiedObject(object, parsed.data);
         return await dependencies.insertMetadata(sellerId, parsed.data);
       } catch (error) {
-        if (shouldCleanup || error instanceof AppError && error.code === "VALIDATION_ERROR") {
-          await dependencies.removeObjects(sellerId, productImageBucket, [parsed.data.objectPath]).catch(() => undefined);
+        if (shouldCleanup || identifiedCandidateError(error)) {
+          try {
+            await dependencies.removeObjects(sellerId, productImageBucket, [parsed.data.objectPath]);
+          } catch {
+            throw new AppError("ORPHAN_CLEANUP_REQUIRED", "Gambar belum dapat dibersihkan.");
+          }
         }
         safeFailure(error);
       }
@@ -89,12 +97,14 @@ export function createProductImageService(dependencies: ProductImageServiceDepen
       if (!parsed.success) throw new AppError("VALIDATION_ERROR", "Metadata pengganti tidak valid.");
       const { sellerId } = await dependencies.requireAdmin();
       let image: Awaited<ReturnType<ProductImageServiceDependencies["getOwnedImage"]>> | undefined;
+      let candidateVerified = false;
       let updated = false;
       try {
         image = await dependencies.getOwnedImage(sellerId, parsed.data.imageId);
         assertPathProduct(parsed.data.objectPath, image.productId);
         if (parsed.data.objectPath === image.objectPath) throw new AppError("VALIDATION_ERROR", "Path pengganti harus baru.");
         const object = await dependencies.verifyObject(sellerId, productImageBucket, parsed.data.objectPath);
+        candidateVerified = object.exists;
         assertVerifiedObject(object, parsed.data);
         const next = await dependencies.updateMetadata(sellerId, image.id, {
           productId: image.productId,
@@ -110,10 +120,16 @@ export function createProductImageService(dependencies: ProductImageServiceDepen
           await dependencies.removeObjects(sellerId, productImageBucket, [image.objectPath]);
           return { ok: true as const, image: next };
         } catch {
-          return { ok: true as const, image: next, warning: { code: "ORPHAN_CLEANUP_REQUIRED" as const, objectPath: image.objectPath } };
+          return { ok: true as const, image: next, warning: { code: "ORPHAN_CLEANUP_REQUIRED" as const } };
         }
       } catch (error) {
-        if (!updated && image) await dependencies.removeObjects(sellerId, productImageBucket, [parsed.data.objectPath]).catch(() => undefined);
+        if (!updated && image && (candidateVerified || identifiedCandidateError(error))) {
+          try {
+            await dependencies.removeObjects(sellerId, productImageBucket, [parsed.data.objectPath]);
+          } catch {
+            throw new AppError("ORPHAN_CLEANUP_REQUIRED", "Gambar belum dapat dibersihkan.");
+          }
+        }
         safeFailure(error);
       }
     },

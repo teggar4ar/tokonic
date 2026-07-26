@@ -43,7 +43,7 @@ export function ProductImageManager({ productId, images }: { productId: string; 
     {images.length < 5 && <Input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />}
     {images.map((image) => <div key={image.id} className="flex items-center gap-2">
       <Input aria-label={`Ganti gambar ${image.displayOrder + 1}`} type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file, image); }} />
-      <Button type="button" disabled={busy} onClick={async () => { setBusy(true); const result = await removeProductImageAction(image.id); setMessage(result.ok ? "Gambar berhasil dihapus." : result.error.message); setBusy(false); }}>Hapus</Button>
+      <Button type="button" disabled={busy} onClick={async () => { setBusy(true); try { const result = await removeProductImageAction(image.id); setMessage(result.ok ? "Gambar berhasil dihapus." : result.error.message); } catch { setMessage("Gambar belum berhasil dihapus. Coba lagi."); } finally { setBusy(false); } }}>Hapus</Button>
     </div>)}
     {message && <p role="status">{message}</p>}
   </div>;

@@ -90,6 +90,26 @@ describe("product image service", () => {
     expect(deps.insertMetadata).not.toHaveBeenCalled();
   });
 
+  it("cleans a downloaded candidate that fails authoritative inspection", async () => {
+    const deps = dependencies({ verifyObject: vi.fn().mockRejectedValue(new AppError("VALIDATION_ERROR", "Objek gambar tidak valid.", { cause: { candidateIdentified: true } })) });
+    const service = createProductImageService(deps);
+
+    await expect(service.register(metadata)).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(deps.removeObjects).toHaveBeenCalledWith(sellerId, "product-images", [oldPath]);
+  });
+
+  it("returns cleanup-required when an identified inspection failure cannot be cleaned", async () => {
+    const deps = dependencies({
+      verifyObject: vi.fn().mockRejectedValue(new AppError("VALIDATION_ERROR", "Objek gambar tidak valid.", { cause: { candidateIdentified: true } })),
+      removeObjects: vi.fn().mockRejectedValue(new Error("storage unavailable")),
+    });
+    const service = createProductImageService(deps);
+
+    const error = await service.register(metadata).catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: "ORPHAN_CLEANUP_REQUIRED" });
+    expect(JSON.stringify(error)).not.toContain(oldPath);
+  });
+
   it("does not delete a candidate that was not positively identified as the caller's new upload", async () => {
     const deps = dependencies({ assertOwnedProduct: vi.fn().mockRejectedValue(new AppError("NOT_FOUND", "Produk tidak ditemukan.")) });
     const service = createProductImageService(deps);
@@ -105,6 +125,19 @@ describe("product image service", () => {
     await expect(service.register(metadata)).rejects.toMatchObject({ code: "CONFLICT" });
     expect(deps.verifyObject).not.toHaveBeenCalled();
     expect(deps.insertMetadata).not.toHaveBeenCalled();
+  });
+
+  it("returns a stable path-free cleanup outcome when verified candidate cleanup fails", async () => {
+    const deps = dependencies({
+      insertMetadata: vi.fn().mockRejectedValue(new Error("database failure")),
+      removeObjects: vi.fn().mockRejectedValue(new Error("storage unavailable")),
+    });
+    const service = createProductImageService(deps);
+
+    const error = await service.register(metadata).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({ code: "ORPHAN_CLEANUP_REQUIRED" });
+    expect(JSON.stringify(error)).not.toContain(oldPath);
   });
 
   it("attempts orphan cleanup when metadata insertion fails", async () => {
@@ -170,9 +203,18 @@ describe("product image service", () => {
 
     await expect(service.replace({ imageId, objectPath: newPath, mimeType: "image/png", byteSize: 12, width: 900, height: 700 })).resolves.toEqual(expect.objectContaining({
       ok: true,
-      warning: expect.objectContaining({ code: "ORPHAN_CLEANUP_REQUIRED", objectPath: oldPath }),
+      warning: { code: "ORPHAN_CLEANUP_REQUIRED" },
     }));
-    expect(deps.updateMetadata).toHaveBeenCalledOnce();
+    expect(JSON.stringify(await service.replace({ imageId, objectPath: newPath, mimeType: "image/png", byteSize: 12, width: 900, height: 700 }))).not.toContain(oldPath);
+    expect(deps.updateMetadata).toHaveBeenCalled();
+  });
+
+  it("does not clean a failed replacement candidate before positive object identity proof", async () => {
+    const deps = dependencies({ verifyObject: vi.fn().mockResolvedValue({ exists: false }) });
+    const service = createProductImageService(deps);
+
+    await expect(service.replace({ imageId, objectPath: newPath, mimeType: "image/png", byteSize: 12, width: 900, height: 700 })).rejects.toBeInstanceOf(AppError);
+    expect(deps.removeObjects).not.toHaveBeenCalledWith(sellerId, "product-images", [newPath]);
   });
 
   it("does not update metadata when replacement verification fails and cleans the new orphan", async () => {

@@ -15,6 +15,8 @@ const bucket = "product-images";
 type RpcResult = { data: unknown; error: { message: string } | null };
 type LifecycleClient = SupabaseClient<Database> & {
   rpc(name: "register_product_image", args: Record<string, unknown>): PromiseLike<RpcResult>;
+  rpc(name: "replace_product_image", args: Record<string, unknown>): PromiseLike<RpcResult>;
+  rpc(name: "delete_product_image", args: Record<string, unknown>): PromiseLike<RpcResult>;
   rpc(name: "begin_product_deletion", args: Record<string, unknown>): PromiseLike<RpcResult>;
   rpc(name: "finalize_product_deletion", args: Record<string, unknown>): PromiseLike<RpcResult>;
 };
@@ -168,6 +170,19 @@ describe("transactional product image lifecycle", () => {
     expect((await register(client(), productId, path, 0)).error).not.toBeNull();
     expect((await beginDelete(client(), productId)).error).not.toBeNull();
     expect((await finalizeDelete(client(), productId, [])).error).not.toBeNull();
+  });
+
+  it("routes metadata deletion through the narrowly granted owner-authorized lifecycle RPC", async () => {
+    const productId = await createProduct("Lifecycle image deletion");
+    const path = imagePath(productId);
+    await upload(path);
+    const registration = await register(owner, productId, path, 0);
+    expect(registration.error).toBeNull();
+    const imageId = (registration.data as { id: string }).id;
+
+    expect((await unrelated.rpc("delete_product_image", { p_image_id: imageId })).error).not.toBeNull();
+    expect((await owner.rpc("delete_product_image", { p_image_id: imageId })).error).toBeNull();
+    expect((await serviceRole.from("product_images").select("id").eq("id", imageId)).data).toHaveLength(0);
   });
 
   it("enforces owner authorization inside every lifecycle function", async () => {

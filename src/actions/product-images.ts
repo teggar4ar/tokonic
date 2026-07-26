@@ -12,6 +12,10 @@ function failure(error: unknown) {
   return { ok: false as const, error: { code: "INTERNAL_ERROR" as AppErrorCode, message: "Operasi gambar gagal." } };
 }
 
+function safeImage(image: { id: string; mimeType: string; byteSize: number; width: number | null; height: number | null; displayOrder: number }) {
+  return { id: image.id, mimeType: image.mimeType, byteSize: image.byteSize, width: image.width, height: image.height, displayOrder: image.displayOrder };
+}
+
 function revalidateImageRoutes(productId: string) {
   revalidatePath("/");
   revalidatePath("/admin/produk");
@@ -25,7 +29,7 @@ export async function registerProductImageAction(input: Parameters<typeof produc
     if (!parsed.success) throw new AppError("VALIDATION_ERROR", "Metadata gambar tidak valid.");
     const image = await productImageService.register(parsed.data);
     revalidateImageRoutes(image.productId);
-    return { ok: true as const, data: image };
+    return { ok: true as const, data: safeImage(image) };
   } catch (error) {
     return failure(error);
   }
@@ -38,7 +42,7 @@ export async function removeProductImageAction(imageId: string) {
     if (!parsedId.success) throw new AppError("VALIDATION_ERROR", "Gambar tidak valid.");
     const result = await productImageService.remove(parsedId.data);
     revalidateImageRoutes(result.productId);
-    return { ok: true as const, data: result };
+    return { ok: true as const, data: { ok: true as const } };
   } catch (error) {
     return failure(error);
   }
@@ -51,7 +55,7 @@ export async function replaceProductImageAction(input: unknown) {
     if (!parsed.success) throw new AppError("VALIDATION_ERROR", "Metadata pengganti tidak valid.");
     const result = await productImageService.replace(parsed.data);
     revalidateImageRoutes(result.image.productId);
-    return { ok: true as const, data: result.image, ...(result.warning ? { warning: result.warning } : {}) };
+    return { ok: true as const, data: safeImage(result.image), ...(result.warning ? { warning: { code: result.warning.code } } : {}) };
   } catch (error) {
     return failure(error);
   }

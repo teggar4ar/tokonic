@@ -74,16 +74,28 @@ describe("product image actions", () => {
     expect(service).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["register", () => registerProductImageAction(metadata)],
+    ["replace", () => replaceProductImageAction({ imageId, ...metadata })],
+    ["remove", () => removeProductImageAction(imageId)],
+  ] as const)("returns a path-free safe view model after %s succeeds", async (_name, execute) => {
+    const result = await execute();
+
+    expect(result).toMatchObject({ ok: true });
+    expect(JSON.stringify(result)).not.toContain("objectPath");
+    expect(JSON.stringify(result)).not.toContain("product-images");
+  });
+
   it("returns replacement cleanup warnings without converting success to failure", async () => {
     mocks.replace.mockResolvedValue({
       ok: true,
       image: { id: imageId, ...metadata },
-      warning: { code: "ORPHAN_CLEANUP_REQUIRED", objectPath: metadata.objectPath },
-    });
-
-    await expect(replaceProductImageAction({ imageId, ...metadata })).resolves.toMatchObject({
-      ok: true,
       warning: { code: "ORPHAN_CLEANUP_REQUIRED" },
     });
+
+    const result = await replaceProductImageAction({ imageId, ...metadata });
+
+    expect(result).toMatchObject({ ok: true, warning: { code: "ORPHAN_CLEANUP_REQUIRED" } });
+    expect(JSON.stringify("warning" in result ? result.warning : undefined)).not.toContain(metadata.objectPath);
   });
 });

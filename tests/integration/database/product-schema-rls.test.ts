@@ -844,7 +844,7 @@ describe("product RLS — owner access", () => {
     expect(error).not.toBeNull();
   });
 
-  it("can update own product image display_order", async () => {
+  it("cannot bypass lifecycle ownership and state checks with direct product image UPDATE", async () => {
     // Get the existing image for the published product
     const { data: imgs } = await productImages(ownerClient)
       .select("id, display_order")
@@ -852,22 +852,14 @@ describe("product RLS — owner access", () => {
     expect(imgs!.length).toBeGreaterThanOrEqual(1);
     const imgId = imgs![0].id;
 
-    const { data, error } = await productImages(ownerClient)
+    const { error } = await productImages(ownerClient)
       .update({ display_order: 3 })
-      .eq("id", imgId)
-      .select("display_order")
-      .single();
-
-    expect(error).toBeNull();
-    expect(data?.display_order).toBe(3);
-
-    // Restore
-    await productImages(serviceRoleClient)
-      .update({ display_order: 0 })
       .eq("id", imgId);
+
+    expect(error).not.toBeNull();
   });
 
-  it("can delete an owned image fixture created through trusted setup", async () => {
+  it("cannot bypass the narrowly granted deletion lifecycle with direct product image DELETE", async () => {
     const { data: temp } = await productImages(serviceRoleClient)
       .insert({
         product_id: publishedProductId,
@@ -885,7 +877,8 @@ describe("product RLS — owner access", () => {
       .delete()
       .eq("id", temp!.id);
 
-    expect(error).toBeNull();
+    expect(error).not.toBeNull();
+    await productImages(serviceRoleClient).delete().eq("id", temp!.id);
   });
 });
 
@@ -1127,8 +1120,8 @@ describe("product_images privilege matrix", () => {
     expect(auth).toBeDefined();
     expect(auth!.has_select).toBe(true);
     expect(auth!.has_insert).toBe(false);
-    expect(auth!.has_update).toBe(true);
-    expect(auth!.has_delete).toBe(true);
+    expect(auth!.has_update).toBe(false);
+    expect(auth!.has_delete).toBe(false);
   });
 
   it("service_role has SELECT, INSERT, UPDATE, DELETE", () => {
