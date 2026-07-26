@@ -41,11 +41,30 @@ beforeAll(async () => {
 });
 
 describe("seller RLS — anon isolation", () => {
-  it("cannot read any seller rows", async () => {
-    const { data, error } = await anonClient.from("sellers").select("id");
+  it("can read only public store-profile columns", async () => {
+    const { data, error } = await anonClient
+      .from("sellers")
+      .select("id, store_name, store_slug, logo_bucket, logo_path");
+
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+    expect(data!.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("cannot read contact or origin columns", async () => {
+    const { data, error } = await anonClient
+      .from("sellers")
+      .select("id, whatsapp_phone");
 
     expect(error).not.toBeNull();
     expect(data).toBeNull();
+
+    const { data: originData, error: originError } = await anonClient
+      .from("sellers")
+      .select("origin_address");
+
+    expect(originError).not.toBeNull();
+    expect(originData).toBeNull();
   });
 
   it("cannot insert a seller row", async () => {
