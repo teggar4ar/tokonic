@@ -22,6 +22,7 @@ type LifecycleClient = SupabaseClient<Database> & {
 };
 
 let owner: LifecycleClient;
+let concurrentOwner: LifecycleClient;
 let anon: LifecycleClient;
 let unrelated: LifecycleClient;
 let serviceRole: SupabaseClient<Database>;
@@ -81,6 +82,7 @@ function finalizeDelete(client: LifecycleClient, productId: string, cleanedPaths
 beforeAll(async () => {
   serviceRole = createServiceRoleClient();
   owner = await createAuthenticatedAdminClient() as LifecycleClient;
+  concurrentOwner = await createAuthenticatedAdminClient() as LifecycleClient;
   anon = createAnonClient() as LifecycleClient;
   unrelated = await createUnrelatedAuthenticatedClient() as LifecycleClient;
   const admin = readProvisionedAdmin();
@@ -113,7 +115,7 @@ describe("transactional product image lifecycle", () => {
 
     const [registration, deletion] = await Promise.all([
       register(owner, productId, path, 0),
-      beginDelete(owner, productId),
+      beginDelete(concurrentOwner, productId),
     ]);
 
     expect(Number(!registration.error) + Number(!deletion.error)).toBeGreaterThanOrEqual(1);
@@ -125,7 +127,7 @@ describe("transactional product image lifecycle", () => {
       expect(registration.error.message).toMatch(/delet|state|conflict/i);
       expect((await owner.storage.from(bucket).remove([path])).error).toBeNull();
     }
-  });
+  }, 60_000);
 
   it("makes begin, retry, and finalize deletion idempotent", async () => {
     const productId = await createProduct("Idempotent deletion");

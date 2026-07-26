@@ -948,13 +948,12 @@ describe("product RLS — unrelated authenticated user isolation", () => {
   });
 
   it("cannot update any product image", async () => {
-    const { data, error } = await productImages(unrelatedClient)
+    const { error } = await productImages(unrelatedClient)
       .update({ display_order: 4 })
-      .eq("product_id", publishedProductId)
-      .select("id");
+      .eq("product_id", publishedProductId);
 
-    expect(error).toBeNull();
-    expect(data).toEqual([]);
+    expect(error).not.toBeNull();
+    expect(error?.code).toBe("42501");
   });
 
   it("cannot delete any product image", async () => {
