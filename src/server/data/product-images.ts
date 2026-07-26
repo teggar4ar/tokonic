@@ -61,8 +61,7 @@ export async function verifyOwnedStorageObject(sellerId: string, bucket: string,
 
 export async function insertProductImageMetadata(sellerId: string, input: ProductImageMetadataInput) {
   const supabase = await authorizedClient(sellerId);
-  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string } | null }>;
-  const { data, error } = await rpc("register_product_image", {
+  const { data, error } = await supabase.rpc("register_product_image", {
     p_product_id: input.productId,
     p_bucket: productImageBucket,
     p_object_path: input.objectPath,
@@ -79,8 +78,7 @@ export async function insertProductImageMetadata(sellerId: string, input: Produc
 
 export async function updateProductImageMetadata(sellerId: string, imageId: string, input: ProductImageMetadataInput) {
   const supabase = await authorizedClient(sellerId);
-  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string } | null }>;
-  const { data, error } = await rpc("replace_product_image", { p_image_id: imageId, p_object_path: input.objectPath, p_mime_type: input.mimeType, p_byte_size: input.byteSize, p_width: input.width, p_height: input.height });
+  const { data, error } = await supabase.rpc("replace_product_image", { p_image_id: imageId, p_object_path: input.objectPath, p_mime_type: input.mimeType, p_byte_size: input.byteSize, p_width: input.width, p_height: input.height });
   if (error || !data || typeof data !== "object" || Array.isArray(data)) throw new AppError(error?.code === "P0002" ? "NOT_FOUND" : error?.code === "40001" ? "CONFLICT" : "INTERNAL_ERROR", "Metadata gambar tidak dapat diperbarui.", { cause: error });
   const row = data as Record<string, unknown>;
   return { id: String(row.id), productId: String(row.product_id), objectPath: String(row.object_path), mimeType: String(row.mime_type), byteSize: Number(row.byte_size), width: Number(row.width), height: Number(row.height), displayOrder: Number(row.display_order) };
@@ -88,8 +86,7 @@ export async function updateProductImageMetadata(sellerId: string, imageId: stri
 
 export async function deleteProductImageMetadata(sellerId: string, imageId: string) {
   const supabase = await authorizedClient(sellerId);
-  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string } | null }>;
-  const { data, error } = await rpc("delete_product_image", { p_image_id: imageId });
+  const { data, error } = await supabase.rpc("delete_product_image", { p_image_id: imageId });
   if (error || !data) throw new AppError(error?.code === "P0002" ? "NOT_FOUND" : error?.code === "40001" ? "CONFLICT" : "INTERNAL_ERROR", "Metadata gambar tidak dapat dihapus.", { cause: error });
 }
 

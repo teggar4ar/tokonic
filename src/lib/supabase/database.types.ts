@@ -285,6 +285,10 @@ export type Database = {
         }
         Returns: Json
       }
+      set_product_publication: {
+        Args: { p_is_published: boolean; p_product_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

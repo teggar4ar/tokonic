@@ -116,11 +116,13 @@ export function SettingsForm({ initialValue }: SettingsFormProps) {
 
 type FieldProps = React.ComponentProps<typeof Input> & { label: string; name: string };
 
-function Field({ label, name, ...props }: FieldProps) {
+function Field({ label, name, defaultValue, ...props }: FieldProps) {
+  const [initialDefault] = useState(defaultValue);
+
   return (
     <div className="grid gap-2">
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} {...props} />
+      <Input id={name} name={name} defaultValue={initialDefault} {...props} />
     </div>
   );
 }

@@ -50,8 +50,56 @@ function productValues(input: ProductCreateInput) {
     price: input.price,
     stock: input.stock,
     weight_grams: input.weightGrams,
-    is_published: input.isPublished,
   };
+}
+
+type ProductPublicationRow = {
+  id: unknown;
+  seller_id: unknown;
+  slug: unknown;
+  name: unknown;
+  description: unknown;
+  price: unknown;
+  stock: unknown;
+  weight_grams: unknown;
+  is_published: unknown;
+};
+
+function mapPublicationResult(data: unknown) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new AppError("INTERNAL_ERROR", "Status publikasi produk tidak valid.");
+  }
+
+  const row = data as ProductPublicationRow;
+  return mapProduct({
+    id: String(row.id),
+    seller_id: String(row.seller_id),
+    slug: String(row.slug),
+    name: String(row.name),
+    description: String(row.description),
+    price: Number(row.price),
+    stock: Number(row.stock),
+    weight_grams: Number(row.weight_grams),
+    is_published: row.is_published === true,
+  });
+}
+
+async function setOwnedProductPublication(productId: string, isPublished: boolean) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("set_product_publication", {
+    p_product_id: productId,
+    p_is_published: isPublished,
+  });
+
+  if (error) {
+    throw new AppError(
+      error.code === "P0002" ? "NOT_FOUND" : error.code === "40001" ? "CONFLICT" : "INTERNAL_ERROR",
+      "Status publikasi produk tidak dapat diubah.",
+      { cause: error },
+    );
+  }
+
+  return mapPublicationResult(data);
 }
 
 export async function getPublishedProductsForCart(productIds: string[]) {
@@ -236,7 +284,7 @@ export async function createProduct(sellerId: string, input: ProductCreateInput)
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("products")
-    .insert({ seller_id: sellerId, ...productValues(input) })
+    .insert({ seller_id: sellerId, ...productValues(input), is_published: input.isPublished })
     .select(productColumns)
     .single();
 
@@ -266,36 +314,22 @@ export async function updateOwnedProduct(sellerId: string, productId: string, in
     throw new AppError("NOT_FOUND", "Produk tidak ditemukan.");
   }
 
+  if (data.is_published !== input.isPublished) {
+    return await setOwnedProductPublication(productId, input.isPublished);
+  }
+
   return mapProduct(data);
 }
 
 export async function unpublishOwnedProduct(sellerId: string, productId: string) {
   await verifySeller(sellerId);
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("products")
-    .update({ is_published: false })
-    .eq("id", productId)
-    .eq("seller_id", sellerId)
-    .select(productColumns)
-    .maybeSingle();
-
-  if (error) {
-    throw new AppError("INTERNAL_ERROR", "Produk tidak dapat dinonaktifkan.", { cause: error });
-  }
-
-  if (!data) {
-    throw new AppError("NOT_FOUND", "Produk tidak ditemukan.");
-  }
-
-  return mapProduct(data);
+  return await setOwnedProductPublication(productId, false);
 }
 
 export async function listOwnedProductImagePaths(sellerId: string, productId: string) {
   await verifySeller(sellerId);
   const supabase = await createClient();
-  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string } | null }>;
-  const { data, error } = await rpc("begin_product_deletion", { p_product_id: productId });
+  const { data, error } = await supabase.rpc("begin_product_deletion", { p_product_id: productId });
   if (error || !data || typeof data !== "object" || Array.isArray(data)) throw new AppError(error?.code === "P0002" ? "NOT_FOUND" : "INTERNAL_ERROR", "Penghapusan produk tidak dapat dimulai.", { cause: error });
   const paths = (data as Record<string, unknown>).object_paths;
   if (!Array.isArray(paths) || !paths.every((path) => typeof path === "string")) throw new AppError("INTERNAL_ERROR", "Daftar gambar produk tidak valid.");
@@ -332,8 +366,7 @@ export async function removeOwnedProductImageObjects(sellerId: string, bucket: s
 export async function hardDeleteOwnedProduct(sellerId: string, productId: string, cleanedPaths: string[] = []) {
   await verifySeller(sellerId);
   const supabase = await createClient();
-  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string } | null }>;
-  const { data, error } = await rpc("finalize_product_deletion", { p_product_id: productId, p_cleaned_object_paths: cleanedPaths });
+  const { data, error } = await supabase.rpc("finalize_product_deletion", { p_product_id: productId, p_cleaned_object_paths: cleanedPaths });
   if (error || !data || typeof data !== "object" || Array.isArray(data)) throw new AppError("INTERNAL_ERROR", "Produk tidak dapat dihapus.", { cause: error });
   const result = data as Record<string, unknown>;
   return { id: productId, sellerId, slug: typeof result.slug === "string" ? result.slug : "" };
