@@ -1,3 +1,4 @@
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { SettingsForm } from "@/components/forms/settings-form";
 import { settingsSchema } from "@/lib/validation/settings";
 import { AppError } from "@/server/errors/app-error";
@@ -22,13 +23,11 @@ export default async function SettingsPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-gutter py-10">
-      <header className="mb-8">
-        <p className="text-sm font-semibold text-muted-foreground">Admin Tokonic</p>
-        <h1 className="mt-1 text-3xl font-bold">Pengaturan toko</h1>
-        <p className="mt-2 text-muted-foreground">Kelola identitas toko dan lokasi asal pengiriman.</p>
-      </header>
-      <SettingsForm initialValue={settings.data} />
+    <main className="px-gutter py-8">
+      <AdminPageHeader title="Pengaturan toko" description="Kelola identitas toko dan lokasi asal pengiriman." />
+      <div className="mt-6 max-w-3xl">
+        <SettingsForm initialValue={settings.data} />
+      </div>
     </main>
   );
 }

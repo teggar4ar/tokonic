@@ -79,6 +79,94 @@ export async function getPublishedProductsForCart(productIds: string[]) {
   }));
 }
 
+export async function listOwnedProducts() {
+  const { sellerId } = await requireAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, name, slug, price, stock, is_published")
+    .eq("seller_id", sellerId)
+    .order("name", { ascending: true });
+
+  if (error || !data) {
+    throw new AppError("INTERNAL_ERROR", "Daftar produk tidak dapat dimuat.", { cause: error });
+  }
+
+  return data.map((product) => ({
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    priceRupiah: String(product.price),
+    stock: product.stock,
+    isPublished: product.is_published,
+  }));
+}
+
+export async function getOwnedProduct(productId: string) {
+  const { sellerId } = await requireAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, name, slug, description, price, stock, weight_grams, is_published")
+    .eq("id", productId)
+    .eq("seller_id", sellerId)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError("INTERNAL_ERROR", "Produk tidak dapat dimuat.", { cause: error });
+  }
+
+  if (!data) {
+    throw new AppError("NOT_FOUND", "Produk tidak ditemukan.");
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    description: data.description,
+    price: data.price,
+    stock: data.stock,
+    weightGrams: data.weight_grams,
+    isPublished: data.is_published,
+  };
+}
+
+export async function listOwnedProductImages(productId: string) {
+  const { sellerId } = await requireAdmin();
+  const supabase = await createClient();
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .eq("seller_id", sellerId)
+    .maybeSingle();
+
+  if (productError) {
+    throw new AppError("INTERNAL_ERROR", "Produk tidak dapat diverifikasi.", { cause: productError });
+  }
+
+  if (!product) {
+    throw new AppError("NOT_FOUND", "Produk tidak ditemukan.");
+  }
+
+  const { data, error } = await supabase
+    .from("product_images")
+    .select("id, object_path, display_order")
+    .eq("product_id", productId)
+    .order("display_order", { ascending: true });
+
+  if (error || !data) {
+    throw new AppError("INTERNAL_ERROR", "Gambar produk tidak dapat dimuat.", { cause: error });
+  }
+
+  return data.map((image) => ({
+    id: image.id,
+    objectPath: image.object_path,
+    displayOrder: image.display_order,
+  }));
+}
+
 export async function createProduct(sellerId: string, input: ProductCreateInput) {
   await verifySeller(sellerId);
   const supabase = await createClient();
