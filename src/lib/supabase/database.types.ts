@@ -58,6 +58,35 @@ export type Database = {
         }
         Relationships: []
       }
+      product_deletion_receipts: {
+        Row: {
+          completed_at: string
+          product_id: string
+          seller_id: string
+          slug: string
+        }
+        Insert: {
+          completed_at?: string
+          product_id: string
+          seller_id: string
+          slug: string
+        }
+        Update: {
+          completed_at?: string
+          product_id?: string
+          seller_id?: string
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_deletion_receipts_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_images: {
         Row: {
           bucket: string
@@ -108,6 +137,7 @@ export type Database = {
       products: {
         Row: {
           created_at: string
+          deletion_started_at: string | null
           description: string
           id: string
           is_published: boolean
@@ -121,6 +151,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deletion_started_at?: string | null
           description?: string
           id?: string
           is_published?: boolean
@@ -134,6 +165,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deletion_started_at?: string | null
           description?: string
           id?: string
           is_published?: boolean
@@ -211,6 +243,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      begin_product_deletion: { Args: { p_product_id: string }; Returns: Json }
       cleanup_login_rate_limit_buckets: {
         Args: { p_now: string }
         Returns: Json
@@ -221,6 +254,34 @@ export type Database = {
       }
       delete_login_rate_limit_email_bucket: {
         Args: { p_email_digest: string }
+        Returns: Json
+      }
+      finalize_product_deletion: {
+        Args: { p_cleaned_object_paths: string[]; p_product_id: string }
+        Returns: Json
+      }
+      register_product_image: {
+        Args: {
+          p_bucket: string
+          p_byte_size: number
+          p_display_order: number
+          p_height: number
+          p_mime_type: string
+          p_object_path: string
+          p_product_id: string
+          p_width: number
+        }
+        Returns: Json
+      }
+      replace_product_image: {
+        Args: {
+          p_byte_size: number
+          p_height: number
+          p_image_id: string
+          p_mime_type: string
+          p_object_path: string
+          p_width: number
+        }
         Returns: Json
       }
     }
